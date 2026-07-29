@@ -301,6 +301,82 @@
         letter-spacing: 0.12em;
       }
 
+      .obstacle-zone {
+        position: absolute;
+        top: 34%;
+        z-index: 6;
+        width: min(44%, 390px);
+        height: 86px;
+        opacity: 0;
+        pointer-events: none;
+        filter: drop-shadow(0 12px 20px rgba(0, 0, 0, .48));
+      }
+
+      .obstacle-zone.from-left {
+        left: 0;
+        animation: obstacle-from-left 3.2s linear forwards;
+      }
+
+      .obstacle-zone.from-right {
+        right: 0;
+        animation: obstacle-from-right 3.2s linear forwards;
+      }
+
+      .obstacle {
+        position: absolute;
+        inset: 20px 0 0;
+        overflow: hidden;
+        border: 3px solid #ffcf58;
+        border-radius: 16px;
+        background:
+          repeating-linear-gradient(-45deg, #332306 0 17px, #f5a900 17px 34px);
+        box-shadow:
+          inset 0 0 25px rgba(255, 222, 96, .35),
+          0 0 28px rgba(255, 176, 32, .36);
+      }
+
+      .obstacle::before,
+      .obstacle::after {
+        content: "";
+        position: absolute;
+        top: 50%;
+        width: 28px;
+        height: 28px;
+        transform: translateY(-50%);
+        border: 6px solid #101927;
+        border-radius: 50%;
+        background: #ffcf58;
+      }
+
+      .obstacle::before { left: 18px; }
+      .obstacle::after { right: 18px; }
+
+      .obstacle-warning {
+        position: absolute;
+        top: 0;
+        left: 50%;
+        width: max-content;
+        transform: translateX(-50%);
+        padding: 4px 10px;
+        border: 1px solid rgba(255, 215, 102, .6);
+        border-radius: 999px;
+        color: #fff3bf;
+        background: rgba(55, 31, 2, .88);
+        font-size: .7rem;
+        font-weight: 900;
+        letter-spacing: .1em;
+      }
+
+      .obstacle-zone.avoided .obstacle {
+        border-color: var(--lime);
+        filter: hue-rotate(52deg) brightness(1.25);
+      }
+
+      .obstacle-zone.hit .obstacle {
+        border-color: #ff648a;
+        animation: obstacle-hit .38s ease-in-out;
+      }
+
       .status-panel {
         align-self: center;
         max-width: 580px;
@@ -411,6 +487,8 @@
       .meter-row { display: flex; justify-content: space-between; font-size: .75rem; color: var(--muted); margin-bottom: 8px; }
       .meter-track { height: 9px; overflow: hidden; background: rgba(255,255,255,.07); border-radius: 999px; }
       .meter-fill { height: 100%; width: 0; background: linear-gradient(90deg, var(--cyan), var(--lime)); border-radius: inherit; transition: width .08s linear; }
+      .bend-meter { margin-top: 13px; }
+      #bend-meter { background: linear-gradient(90deg, var(--violet), var(--cyan)); }
 
       .debug-grid { margin-top: 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
       .debug-cell { padding: 10px; border: 1px solid rgba(255,255,255,.07); border-radius: 12px; background: rgba(255,255,255,.025); }
@@ -446,6 +524,7 @@
       }
 
       .impact-text.show { animation: impact .75s cubic-bezier(.15,.85,.2,1); }
+      .impact-text.dodge { color: var(--cyan); text-shadow: 0 0 18px rgba(83,237,255,.8), 0 8px 0 rgba(21, 59, 85, .65); }
 
       .particle {
         position: absolute;
@@ -473,6 +552,23 @@
       }
       @keyframes impact { 0% { opacity: 0; transform: translate(-50%,-50%) scale(.45) rotate(-7deg); } 22% { opacity: 1; transform: translate(-50%,-50%) scale(1.08) rotate(-3deg); } 75% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%,-62%) scale(1.16) rotate(0); } }
       @keyframes particle { from { opacity: 1; transform: translate(0,0) rotate(var(--r)); } to { opacity: 0; transform: translate(var(--x), var(--y)) rotate(calc(var(--r) + 90deg)); } }
+      @keyframes obstacle-from-left {
+        0% { opacity: 0; transform: translateX(-120%); }
+        10% { opacity: 1; }
+        55% { opacity: 1; transform: translateX(105%); }
+        100% { opacity: 1; transform: translateX(265%); }
+      }
+      @keyframes obstacle-from-right {
+        0% { opacity: 0; transform: translateX(120%); }
+        10% { opacity: 1; }
+        55% { opacity: 1; transform: translateX(-105%); }
+        100% { opacity: 1; transform: translateX(-265%); }
+      }
+      @keyframes obstacle-hit {
+        0%, 100% { transform: translateX(0); filter: brightness(1); }
+        25% { transform: translateX(-12px); filter: brightness(1.8); }
+        75% { transform: translateX(12px); filter: brightness(1.8); }
+      }
 
       @media (max-width: 900px) {
         .layout { grid-template-columns: 1fr; }
@@ -488,6 +584,7 @@
         .mission { max-width: 62%; }
         .score-card { min-width: 100px; }
         .enemy-zone { left: 50%; right: auto; transform: translateX(-50%) scale(.82); transform-origin: center bottom; }
+        .obstacle-zone { top: 37%; width: 48%; transform-origin: center; }
         .sidebar { grid-template-columns: 1fr; }
       }
 
@@ -526,11 +623,16 @@
             <div class="enemy-feet"><i></i><i></i></div>
           </div>
 
+          <div id="obstacle-zone" class="obstacle-zone" aria-hidden="true">
+            <span id="obstacle-warning" class="obstacle-warning">DANGER</span>
+            <div class="obstacle"></div>
+          </div>
+
           <div class="hud">
             <div class="hud-row">
               <div class="mission">
                 <span class="eyebrow">MISSION</span>
-                <strong>ジャンプで敵を倒せ！</strong>
+                <strong id="mission-text">ジャンプと横曲げで戦え！</strong>
               </div>
               <div class="score-card">
                 <span class="eyebrow">SCORE</span>
@@ -548,8 +650,8 @@
           <div id="start-overlay" class="start-overlay">
             <div class="start-card">
               <div class="kicker">MEDIAPIPE MOTION GAME</div>
-              <h2>跳んで、<em>倒せ。</em></h2>
-              <p>Webカメラに全身を映し、準備完了の表示が出たらジャンプしてください。あなたの動きが必殺技になります。</p>
+              <h2>跳んで、曲げて、<em>戦え。</em></h2>
+              <p>ジャンプで敵を踏み潰し、横から来る障害物は上体を反対側へ曲げて避けましょう。あなたの動きが必殺技になります。</p>
               <button id="start-button" class="primary-button">カメラを起動して開始</button>
               <p class="safety">安全のため、周囲と頭上に十分なスペースを確保してください。</p>
             </div>
@@ -563,6 +665,7 @@
               <div class="step"><span class="step-number">1</span><div><strong>全身を映す</strong><span>頭から足先までカメラに入る位置へ移動します。</span></div></div>
               <div class="step"><span class="step-number">2</span><div><strong>その場で静止</strong><span>約1.5秒立つと、基準の高さを自動測定します。</span></div></div>
               <div class="step"><span class="step-number">3</span><div><strong>無理なくジャンプ</strong><span>腰が基準より上がると必殺技が発動します。</span></div></div>
+              <div class="step"><span class="step-number">4</span><div><strong>横に曲げて回避</strong><span>障害物が来た方向と反対側へ、上体をゆっくり曲げます。</span></div></div>
             </div>
           </section>
 
@@ -570,18 +673,24 @@
             <h3>動作センサー</h3>
             <div class="meter-row"><span>ジャンプ量</span><strong id="jump-value">0%</strong></div>
             <div class="meter-track"><div id="jump-meter" class="meter-fill"></div></div>
+            <div class="bend-meter">
+              <div class="meter-row"><span>横曲げ量</span><strong id="bend-value">中央 0%</strong></div>
+              <div class="meter-track"><div id="bend-meter" class="meter-fill"></div></div>
+            </div>
             <div class="debug-grid">
               <div class="debug-cell"><span>骨格検出</span><strong id="pose-state">待機中</strong></div>
               <div class="debug-cell"><span>基準姿勢</span><strong id="calibration-state">未設定</strong></div>
               <div class="debug-cell"><span>腰の移動</span><strong id="hip-delta">0.000</strong></div>
               <div class="debug-cell"><span>撃破数</span><strong id="defeat-count">0</strong></div>
+              <div class="debug-cell"><span>横曲げ方向</span><strong id="bend-direction">中央</strong></div>
+              <div class="debug-cell"><span>回避数</span><strong id="avoid-count">0</strong></div>
             </div>
             <button id="recalibrate-button" class="secondary-button" disabled>基準姿勢を測り直す</button>
           </section>
 
           <section class="panel">
             <h3>判定について</h3>
-            <p class="notice">左右の腰と足首の位置を毎フレーム確認し、静止時の腰の高さから一定以上上昇した場合にジャンプと判定します。カメラ映像は保存しません。</p>
+            <p class="notice">ジャンプは腰と足首の上昇量、横曲げは両肩の中心が両腰の中心からどれだけ左右へ移動したかで判定します。体格差を小さくするため、横曲げ量は肩幅で割って正規化します。カメラ映像は保存しません。</p>
           </section>
         </aside>
       </section>
@@ -610,10 +719,17 @@
       const hipDeltaLabel = document.querySelector("#hip-delta");
       const jumpMeter = document.querySelector("#jump-meter");
       const jumpValue = document.querySelector("#jump-value");
+      const bendMeter = document.querySelector("#bend-meter");
+      const bendValue = document.querySelector("#bend-value");
+      const bendDirectionLabel = document.querySelector("#bend-direction");
       const enemyZone = document.querySelector("#enemy-zone");
       const enemyNumber = document.querySelector("#enemy-number");
       const scoreLabel = document.querySelector("#score");
       const defeatCountLabel = document.querySelector("#defeat-count");
+      const avoidCountLabel = document.querySelector("#avoid-count");
+      const obstacleZone = document.querySelector("#obstacle-zone");
+      const obstacleWarning = document.querySelector("#obstacle-warning");
+      const missionText = document.querySelector("#mission-text");
       const impactText = document.querySelector("#impact-text");
 
       let landmarker;
@@ -630,12 +746,21 @@
       let enemyReady = true;
       let previousHipY = null;
       let previousFrameAt = performance.now();
+      let obstacleActive = false;
+      let obstacleResolved = false;
+      let obstacleSide = null;
+      let obstacleStartedAt = 0;
+      let nextObstacleAt = Infinity;
+      let avoided = 0;
 
       const CALIBRATION_FRAMES = 42;
       const JUMP_HIP_THRESHOLD = 0.052;
       const JUMP_ANKLE_THRESHOLD = 0.018;
       const LANDING_THRESHOLD = 0.022;
       const COOLDOWN_MS = 1150;
+      const BEND_THRESHOLD = 0.30;
+      const OBSTACLE_CHECK_DELAY_MS = 1050;
+      const OBSTACLE_TIMEOUT_MS = 2850;
 
       function setStatus(title, detail) {
         statusTitle.textContent = title;
@@ -662,6 +787,15 @@
         airborne = false;
         attackArmed = false;
         previousHipY = null;
+        obstacleActive = false;
+        obstacleResolved = false;
+        obstacleSide = null;
+        nextObstacleAt = Infinity;
+        obstacleZone.className = "obstacle-zone";
+        obstacleZone.setAttribute("aria-hidden", "true");
+        bendMeter.style.width = "0%";
+        bendValue.textContent = "中央 0%";
+        bendDirectionLabel.textContent = "中央";
         calibrationState.textContent = "測定中";
         setStatus("その場で静止してください", "基準となる腰の高さを測定しています");
       }
@@ -701,7 +835,8 @@
             baselineAnkleY = median(calibrationSamples.map((sample) => sample.ankleY));
             calibrationState.textContent = "完了";
             recalibrateButton.disabled = false;
-            setStatus("準備完了 — ジャンプ！", "腰を落としすぎず、その場で軽く跳んでください");
+            nextObstacleAt = now + 5200;
+            setStatus("準備完了 — ジャンプ！", "敵を踏み潰し、障害物が来たら横に曲げて避けてください");
           }
           return;
         }
@@ -712,6 +847,16 @@
         jumpMeter.style.width = `${Math.min(jumpRatio * 100, 100)}%`;
         jumpValue.textContent = `${Math.round(jumpRatio * 100)}%`;
         hipDeltaLabel.textContent = hipRise.toFixed(3);
+
+        updateBendDetector(lm, now);
+
+        if (obstacleActive) {
+          if (!airborne && Math.abs(hipRise) < 0.014) {
+            baselineHipY = baselineHipY * 0.997 + hipY * 0.003;
+            baselineAnkleY = baselineAnkleY * 0.997 + ankleY * 0.003;
+          }
+          return;
+        }
 
         const cooldownComplete = now - lastJumpAt > COOLDOWN_MS;
         const rising = hipVelocity < -0.00012;
@@ -738,6 +883,84 @@
         }
       }
 
+      function updateBendDetector(lm, now) {
+        const shoulderX = average(lm[11].x, lm[12].x);
+        const hipX = average(lm[23].x, lm[24].x);
+        const shoulderWidth = Math.max(Math.abs(lm[11].x - lm[12].x), 0.08);
+        const bendRatio = (hipX - shoulderX) / shoulderWidth;
+        const bendAmount = Math.min(Math.abs(bendRatio) / BEND_THRESHOLD, 1.25);
+        const direction = bendRatio > 0.08 ? "右" : bendRatio < -0.08 ? "左" : "中央";
+
+        bendMeter.style.width = `${Math.min(bendAmount * 100, 100)}%`;
+        bendValue.textContent = `${direction} ${Math.round(bendAmount * 100)}%`;
+        bendDirectionLabel.textContent = direction;
+
+        if (!obstacleActive && !airborne && enemyReady && now >= nextObstacleAt) {
+          startObstacle(now);
+          return;
+        }
+
+        if (!obstacleActive || obstacleResolved) return;
+
+        const requiredDirection = obstacleSide === "left" ? "right" : "left";
+        const bentCorrectly =
+          (requiredDirection === "right" && bendRatio >= BEND_THRESHOLD) ||
+          (requiredDirection === "left" && bendRatio <= -BEND_THRESHOLD);
+        const elapsed = now - obstacleStartedAt;
+
+        if (elapsed >= OBSTACLE_CHECK_DELAY_MS && bentCorrectly) {
+          finishObstacle(true);
+        } else if (elapsed >= OBSTACLE_TIMEOUT_MS) {
+          finishObstacle(false);
+        }
+      }
+
+      function startObstacle(now) {
+        obstacleActive = true;
+        obstacleResolved = false;
+        obstacleStartedAt = now;
+        obstacleSide = Math.random() < 0.5 ? "left" : "right";
+        const requiredLabel = obstacleSide === "left" ? "右" : "左";
+        const incomingLabel = obstacleSide === "left" ? "左" : "右";
+        obstacleZone.className = `obstacle-zone from-${obstacleSide}`;
+        obstacleZone.setAttribute("aria-hidden", "false");
+        obstacleWarning.textContent = `${incomingLabel}から接近`;
+        missionText.textContent = `${requiredLabel}へ曲げて避けろ！`;
+        setStatus(`障害物！ ${requiredLabel}へ曲げる！`, "腰は中央に保ち、肩と上体を横へ曲げてください");
+      }
+
+      function finishObstacle(success) {
+        if (obstacleResolved) return;
+        obstacleResolved = true;
+
+        if (success) {
+          score += 50;
+          avoided += 1;
+          scoreLabel.textContent = String(score).padStart(4, "0");
+          avoidCountLabel.textContent = String(avoided);
+          obstacleZone.classList.add("avoided");
+          impactText.textContent = "DODGE!";
+          impactText.classList.add("dodge");
+          impactText.classList.remove("show");
+          void impactText.offsetWidth;
+          impactText.classList.add("show");
+          setStatus("回避成功！", "きれいな横曲げです。50点獲得！");
+        } else {
+          obstacleZone.classList.add("hit");
+          setStatus("障害物に当たった！", "次は表示された方向へ、もう少し大きく曲げましょう");
+        }
+
+        nextObstacleAt = performance.now() + 6500 + Math.random() * 2500;
+        window.setTimeout(() => {
+          obstacleActive = false;
+          obstacleResolved = false;
+          obstacleZone.className = "obstacle-zone";
+          obstacleZone.setAttribute("aria-hidden", "true");
+          missionText.textContent = "ジャンプと横曲げで戦え！";
+          if (!airborne) setStatus("次の動きに備えよう！", "ジャンプで攻撃。障害物が来たら反対側へ曲げて回避！");
+        }, 950);
+      }
+
       function triggerAttack() {
         enemyReady = false;
         score += 100;
@@ -745,6 +968,8 @@
         scoreLabel.textContent = String(score).padStart(4, "0");
         defeatCountLabel.textContent = String(defeats);
         enemyZone.classList.add("defeated");
+        impactText.textContent = "STOMP!";
+        impactText.classList.remove("dodge");
         impactText.classList.remove("show");
         void impactText.offsetWidth;
         impactText.classList.add("show");
