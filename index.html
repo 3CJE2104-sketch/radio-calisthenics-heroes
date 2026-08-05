@@ -441,7 +441,8 @@
         z-index: 9;
         display: grid;
         place-items: center;
-        padding: 20px;
+        padding: 16px;
+        overflow-y: auto;
         background: linear-gradient(180deg, rgba(3, 9, 19, .68), rgba(3, 9, 19, .9));
         transition: opacity .3s ease, visibility .3s ease;
       }
@@ -449,8 +450,8 @@
       .training-overlay.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
 
       .training-card {
-        width: min(620px, 100%);
-        padding: clamp(22px, 4vw, 38px);
+        width: min(920px, 100%);
+        padding: clamp(18px, 3vw, 28px);
         border: 1px solid rgba(83, 237, 255, .34);
         border-radius: 24px;
         background: rgba(7, 18, 34, .94);
@@ -459,12 +460,12 @@
       }
 
       .training-progress { color: var(--cyan); font-size: .75rem; font-weight: 900; letter-spacing: .16em; }
-      .training-card h2 { margin: 10px 0 8px; font-size: clamp(1.7rem, 5vw, 2.7rem); }
-      .training-card > p { margin: 0 auto 18px; max-width: 510px; color: var(--muted); line-height: 1.7; }
+      .training-card h2 { margin: 7px 0 5px; font-size: clamp(1.55rem, 4vw, 2.35rem); }
+      .training-card > p { margin: 0 auto 12px; max-width: 720px; color: var(--muted); line-height: 1.55; }
       .training-cue { color: var(--lime); font-size: 1.05rem; font-weight: 900; min-height: 1.7em; }
-      .training-track { height: 12px; margin: 18px 0 10px; overflow: hidden; border-radius: 999px; background: rgba(255,255,255,.1); }
+      .training-track { height: 12px; margin: 12px 0 8px; overflow: hidden; border-radius: 999px; background: rgba(255,255,255,.1); }
       .training-fill { width: 0; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--cyan), var(--lime)); transition: width .12s linear; }
-      .training-dots { display: flex; justify-content: center; gap: 9px; margin-top: 18px; }
+      .training-dots { display: flex; justify-content: center; gap: 9px; margin-top: 10px; }
       .training-dot { width: 10px; height: 10px; border-radius: 50%; background: rgba(255,255,255,.18); }
       .training-dot.active { background: var(--cyan); box-shadow: 0 0 12px rgba(83,237,255,.8); }
       .training-dot.done { background: var(--lime); }
@@ -475,9 +476,102 @@
       .training-actions { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
       .training-note { margin-top: 15px !important; font-size: .72rem; }
 
+      .training-visuals {
+        display: grid;
+        grid-template-columns: 1.35fr 1fr;
+        gap: 12px;
+        margin: 12px 0 8px;
+      }
+
+      .training-view {
+        position: relative;
+        min-width: 0;
+        overflow: hidden;
+        border: 1px solid rgba(83, 237, 255, .28);
+        border-radius: 17px;
+        background: #040b15;
+        aspect-ratio: 16 / 9;
+      }
+
+      .training-view-label {
+        position: absolute;
+        top: 9px;
+        left: 10px;
+        z-index: 3;
+        padding: 5px 9px;
+        border-radius: 999px;
+        background: rgba(3, 9, 19, .78);
+        color: var(--cyan);
+        font-size: .66rem;
+        font-weight: 900;
+        letter-spacing: .08em;
+      }
+
+      #training-preview-canvas { display: block; width: 100%; height: 100%; object-fit: contain; }
+
+      .demo-stage {
+        display: grid;
+        place-items: center;
+        background:
+          radial-gradient(circle at 50% 44%, rgba(199,255,79,.13), transparent 38%),
+          linear-gradient(150deg, #0b1b31, #07101e);
+      }
+
+      .demo-floor {
+        position: absolute;
+        left: 18%; right: 18%; bottom: 9%;
+        height: 9%;
+        border: 1px solid rgba(83,237,255,.35);
+        border-radius: 50%;
+      }
+
+      .demo-person {
+        position: relative;
+        width: 70px;
+        height: 145px;
+        margin-top: 13px;
+        transform-origin: 50% 72%;
+      }
+
+      .demo-head, .demo-torso, .demo-limb { position: absolute; display: block; background: var(--lime); box-shadow: 0 0 13px rgba(199,255,79,.28); }
+      .demo-head { left: 26px; top: 0; width: 20px; height: 20px; border-radius: 50%; }
+      .demo-torso { left: 31px; top: 24px; width: 10px; height: 55px; border-radius: 8px; transform-origin: 50% 90%; }
+      .demo-limb { width: 8px; height: 52px; border-radius: 8px; transform-origin: 50% 5%; }
+      .demo-arm-left { left: 29px; top: 28px; transform: rotate(32deg); }
+      .demo-arm-right { left: 35px; top: 28px; transform: rotate(-32deg); }
+      .demo-leg-left { left: 30px; top: 73px; transform: rotate(10deg); }
+      .demo-leg-right { left: 35px; top: 73px; transform: rotate(-10deg); }
+
+      .demo-person.demo-stand { animation: demo-breathe 1.6s ease-in-out infinite; }
+      .demo-person.demo-twist { animation: demo-twist-body 1.5s ease-in-out infinite; }
+      .demo-person.demo-twist .demo-arm-left { animation: demo-twist-left 1.5s ease-in-out infinite; }
+      .demo-person.demo-twist .demo-arm-right { animation: demo-twist-right 1.5s ease-in-out infinite; }
+      .demo-person.demo-jump { animation: demo-jump 1.25s ease-in-out infinite; }
+      .demo-person.demo-jump .demo-arm-left { animation: demo-jump-left 1.25s ease-in-out infinite; }
+      .demo-person.demo-jump .demo-arm-right { animation: demo-jump-right 1.25s ease-in-out infinite; }
+      .demo-person.demo-diagonal { animation: demo-diagonal-body 2.4s ease-in-out infinite; }
+      .demo-person.demo-diagonal .demo-arm-left,
+      .demo-person.demo-diagonal .demo-arm-right { animation: demo-diagonal-arms 2.4s ease-in-out infinite; }
+      .demo-person.demo-complete { animation: demo-complete .9s ease-in-out infinite alternate; }
+
+      @keyframes demo-breathe { 50% { transform: scale(1.03); } }
+      @keyframes demo-twist-body { 0%,100% { transform: skewX(0); } 25% { transform: skewX(-13deg); } 75% { transform: skewX(13deg); } }
+      @keyframes demo-twist-left { 0%,100% { transform: rotate(32deg); } 25% { transform: rotate(88deg); } 75% { transform: rotate(-50deg); } }
+      @keyframes demo-twist-right { 0%,100% { transform: rotate(-32deg); } 25% { transform: rotate(50deg); } 75% { transform: rotate(-88deg); } }
+      @keyframes demo-jump { 0%,100% { transform: translateY(0); } 45%,55% { transform: translateY(-32px); } }
+      @keyframes demo-jump-left { 0%,100% { transform: rotate(32deg); } 45%,55% { transform: rotate(145deg); } }
+      @keyframes demo-jump-right { 0%,100% { transform: rotate(-32deg); } 45%,55% { transform: rotate(-145deg); } }
+      @keyframes demo-diagonal-body { 0%,15%,100% { transform: rotate(0); } 42%,58% { transform: rotate(48deg) translate(5px, 8px); } 78% { transform: rotate(-8deg); } }
+      @keyframes demo-diagonal-arms { 0%,15%,100% { transform: rotate(0); } 42%,58% { transform: rotate(-35deg); } 78% { transform: rotate(155deg); } }
+      @keyframes demo-complete { to { transform: translateY(-7px) scale(1.04); filter: brightness(1.2); } }
+
       @media (max-width: 620px) {
         .scan-grid { grid-template-columns: repeat(2, 1fr); }
         .training-card { padding: 20px 16px; }
+        .training-visuals { grid-template-columns: 1fr; }
+        .training-view { aspect-ratio: 16 / 8; }
+        .demo-stage { min-height: 150px; }
+        .demo-person { transform: scale(.8); }
       }
 
       .primary-button, .secondary-button {
@@ -707,6 +801,24 @@
               <div id="training-progress" class="training-progress">HERO SCAN</div>
               <h2 id="training-title">身体スキャン</h2>
               <p id="training-description">正面を向き、頭から足先まで映してください。</p>
+              <div id="training-visuals" class="training-visuals">
+                <div class="training-view">
+                  <span class="training-view-label">あなたの動き＋骨格</span>
+                  <canvas id="training-preview-canvas" width="640" height="360" aria-label="カメラ映像とMediaPipeの骨格"></canvas>
+                </div>
+                <div class="training-view demo-stage" aria-label="お手本の動き">
+                  <span class="training-view-label">お手本</span>
+                  <div class="demo-floor" aria-hidden="true"></div>
+                  <div id="demo-person" class="demo-person demo-stand" aria-hidden="true">
+                    <i class="demo-head"></i>
+                    <i class="demo-torso"></i>
+                    <i class="demo-limb demo-arm-left"></i>
+                    <i class="demo-limb demo-arm-right"></i>
+                    <i class="demo-limb demo-leg-left"></i>
+                    <i class="demo-limb demo-leg-right"></i>
+                  </div>
+                </div>
+              </div>
               <div id="training-cue" class="training-cue">準備中…</div>
               <div class="training-track"><div id="training-fill" class="training-fill"></div></div>
               <div id="training-dots" class="training-dots" aria-hidden="true">
@@ -784,6 +896,10 @@
       const trainingProgress = document.querySelector("#training-progress");
       const trainingTitle = document.querySelector("#training-title");
       const trainingDescription = document.querySelector("#training-description");
+      const trainingVisuals = document.querySelector("#training-visuals");
+      const trainingPreviewCanvas = document.querySelector("#training-preview-canvas");
+      const trainingPreviewCtx = trainingPreviewCanvas.getContext("2d");
+      const demoPerson = document.querySelector("#demo-person");
       const trainingCue = document.querySelector("#training-cue");
       const trainingFill = document.querySelector("#training-fill");
       const trainingDots = [...document.querySelectorAll(".training-dot")];
@@ -816,6 +932,7 @@
 
       let landmarker;
       let drawingUtils;
+      let trainingDrawingUtils;
       let lastVideoTime = -1;
       let baselineHipY = null;
       let baselineAnkleY = null;
@@ -895,6 +1012,31 @@
         return `画面比 ${Math.round(value * 100)}%`;
       }
 
+      function drawTrainingPreview(lm = null) {
+        if (video.readyState < 2 || gameMode === "battle") return;
+        const width = trainingPreviewCanvas.width;
+        const height = trainingPreviewCanvas.height;
+        trainingPreviewCtx.save();
+        trainingPreviewCtx.clearRect(0, 0, width, height);
+        trainingPreviewCtx.translate(width, 0);
+        trainingPreviewCtx.scale(-1, 1);
+        trainingPreviewCtx.drawImage(video, 0, 0, width, height);
+
+        if (lm && trainingDrawingUtils) {
+          trainingDrawingUtils.drawConnectors(lm, PoseLandmarker.POSE_CONNECTIONS, {
+            color: "rgba(83, 237, 255, 0.95)",
+            lineWidth: 4,
+          });
+          trainingDrawingUtils.drawLandmarks(lm, {
+            color: "#c7ff4f",
+            fillColor: "#07111f",
+            lineWidth: 2,
+            radius: 4,
+          });
+        }
+        trainingPreviewCtx.restore();
+      }
+
       function resetCalibration() {
         gameMode = "calibration";
         baselineHipY = null;
@@ -930,6 +1072,8 @@
         bendDirectionLabel.textContent = "中央";
         calibrationState.textContent = "測定中";
         trainingOverlay.classList.remove("hidden");
+        trainingVisuals.hidden = false;
+        demoPerson.className = "demo-person demo-stand";
         scanSummary.hidden = true;
         trainingActions.hidden = true;
         trainingDots.forEach((dot, index) => dot.className = `training-dot${index === 0 ? " active" : ""}`);
@@ -972,6 +1116,7 @@
         trainingTitle.textContent = title;
         trainingDescription.textContent = description;
         trainingCue.textContent = cue;
+        demoPerson.className = `demo-person ${["demo-twist", "demo-jump", "demo-diagonal"][stage]}`;
         setStatus(title, description);
       }
 
@@ -1056,6 +1201,7 @@
         trainingTitle.textContent = "あなた専用の判定に調整しました";
         trainingDescription.textContent = "身体の相対サイズと動ける範囲を、ゲームのジャンプ判定に反映します。";
         trainingCue.textContent = "準備完了！";
+        demoPerson.className = "demo-person demo-complete";
         trainingFill.style.width = "100%";
         scanSummary.hidden = false;
         trainingActions.hidden = false;
@@ -1314,6 +1460,7 @@
           minTrackingConfidence: 0.55,
         });
         drawingUtils = new DrawingUtils(ctx);
+        trainingDrawingUtils = new DrawingUtils(trainingPreviewCtx);
       }
 
       async function startGame() {
@@ -1365,8 +1512,10 @@
               lineWidth: 2,
               radius: 3,
             });
+            drawTrainingPreview(lm);
             updateJumpDetector(lm);
           } else {
+            drawTrainingPreview();
             poseState.textContent = "未検出";
             if (baselineHipY == null) setStatus("人を探しています", "明るい場所で、カメラの正面に立ってください");
           }
