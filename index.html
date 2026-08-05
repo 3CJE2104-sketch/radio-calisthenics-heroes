@@ -377,6 +377,75 @@
         animation: obstacle-hit .38s ease-in-out;
       }
 
+      .reflect-zone {
+        position: absolute;
+        inset: 0;
+        z-index: 6;
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .reflect-zone.incoming { opacity: 1; }
+
+      .boss-projectile {
+        position: absolute;
+        left: calc(50% - 33px);
+        top: 24%;
+        width: 66px;
+        height: 66px;
+        border: 4px solid #ff8bd4;
+        border-radius: 50%;
+        background:
+          radial-gradient(circle at 38% 32%, #fff 0 8%, #8de9ff 15%, #9d4dff 44%, #2b0c55 72%);
+        box-shadow: 0 0 22px #ff62ce, 0 0 55px rgba(101, 79, 255, .78);
+      }
+
+      .reflect-zone.incoming .boss-projectile {
+        animation: projectile-incoming 3.1s cubic-bezier(.28,.05,.63,1) forwards;
+      }
+
+      .reflect-zone.reflected .boss-projectile {
+        animation: projectile-reflected .75s cubic-bezier(.2,.8,.22,1) forwards;
+        border-color: var(--lime);
+        filter: hue-rotate(70deg) brightness(1.3);
+      }
+
+      .reflect-zone.hit .boss-projectile { animation: projectile-hit .5s ease-out forwards; }
+
+      .reflect-ring {
+        position: absolute;
+        left: 50%;
+        top: 47%;
+        width: 145px;
+        height: 145px;
+        transform: translate(-50%, -50%) scale(.72);
+        border: 4px solid rgba(83, 237, 255, .78);
+        border-radius: 50%;
+        opacity: 0;
+        box-shadow: 0 0 28px rgba(83,237,255,.65), inset 0 0 28px rgba(83,237,255,.3);
+      }
+
+      .reflect-zone.reflected .reflect-ring { animation: reflect-ring .65s ease-out; }
+
+      .reflect-warning {
+        position: absolute;
+        top: 19%;
+        left: 50%;
+        width: max-content;
+        transform: translateX(-50%);
+        padding: 6px 12px;
+        border: 1px solid rgba(255, 139, 212, .7);
+        border-radius: 999px;
+        color: #ffe1f5;
+        background: rgba(55, 5, 55, .86);
+        font-size: .72rem;
+        font-weight: 900;
+        letter-spacing: .12em;
+        animation: warning-pulse .7s ease-in-out infinite alternate;
+      }
+
+      .enemy-zone.boss-hit .enemy { animation: boss-hit .55s ease-in-out; }
+
       .status-panel {
         align-self: center;
         max-width: 580px;
@@ -708,6 +777,12 @@
         25% { transform: translateX(-12px); filter: brightness(1.8); }
         75% { transform: translateX(12px); filter: brightness(1.8); }
       }
+      @keyframes projectile-incoming { from { transform: translate(280px, -130px) scale(.45); opacity: .3; } to { transform: translate(0, 150px) scale(1.18); opacity: 1; } }
+      @keyframes projectile-reflected { from { transform: translate(0, 120px) scale(1.18); opacity: 1; } to { transform: translate(260px, -160px) scale(.28); opacity: 0; } }
+      @keyframes projectile-hit { 0% { transform: translate(0, 145px) scale(1.1); } 70% { transform: translate(0, 145px) scale(2.6); opacity: .9; } 100% { transform: translate(0, 145px) scale(3.1); opacity: 0; } }
+      @keyframes reflect-ring { from { opacity: 1; transform: translate(-50%, -50%) scale(.55); } to { opacity: 0; transform: translate(-50%, -50%) scale(1.55); } }
+      @keyframes warning-pulse { to { box-shadow: 0 0 20px rgba(255,98,206,.55); } }
+      @keyframes boss-hit { 0%,100% { filter: none; } 25% { transform: translateX(-12px); filter: brightness(1.8); } 75% { transform: translateX(12px); filter: brightness(1.8); } }
 
       @media (max-width: 900px) {
         .layout { grid-template-columns: 1fr; }
@@ -767,11 +842,17 @@
             <div class="obstacle"></div>
           </div>
 
+          <div id="reflect-zone" class="reflect-zone" aria-hidden="true">
+            <span class="reflect-warning">BOSS ATTACK — 体をねじれ！</span>
+            <div class="boss-projectile"></div>
+            <div class="reflect-ring"></div>
+          </div>
+
           <div class="hud">
             <div class="hud-row">
               <div class="mission">
                 <span class="eyebrow">MISSION</span>
-                <strong id="mission-text">ジャンプと横曲げで戦え！</strong>
+                <strong id="mission-text">ジャンプ・横曲げ・ねじりで戦え！</strong>
               </div>
               <div class="score-card">
                 <span class="eyebrow">SCORE</span>
@@ -790,7 +871,7 @@
             <div class="start-card">
               <div class="kicker">MEDIAPIPE MOTION GAME</div>
               <h2>跳んで、曲げて、<em>戦え。</em></h2>
-              <p>ジャンプで敵を踏み潰し、横から来る障害物は上体を反対側へ曲げて避けましょう。あなたの動きが必殺技になります。</p>
+              <p>ジャンプで敵を踏み潰し、横曲げで障害物を回避。ボスのエネルギー弾は体をねじって跳ね返しましょう。</p>
               <button id="start-button" class="primary-button">カメラを起動して開始</button>
               <p class="safety">安全のため、周囲と頭上に十分なスペースを確保してください。</p>
             </div>
@@ -849,6 +930,7 @@
               <div class="step"><span class="step-number">2</span><div><strong>ヒーロースキャン</strong><span>ねじる・両脚跳び・斜め下から胸を開く、の3種目で個人調整します。</span></div></div>
               <div class="step"><span class="step-number">3</span><div><strong>ジャンプで攻撃</strong><span>測定した跳び幅に合わせて必殺技が発動します。</span></div></div>
               <div class="step"><span class="step-number">4</span><div><strong>横に曲げて回避</strong><span>障害物が来た方向と反対側へ、上体をゆっくり曲げます。</span></div></div>
+              <div class="step"><span class="step-number">5</span><div><strong>ねじって反射</strong><span>ボスの弾が接近したら、脚を動かさず上体を大きくねじります。</span></div></div>
             </div>
           </section>
 
@@ -860,6 +942,10 @@
               <div class="meter-row"><span>横曲げ量</span><strong id="bend-value">中央 0%</strong></div>
               <div class="meter-track"><div id="bend-meter" class="meter-fill"></div></div>
             </div>
+            <div class="bend-meter">
+              <div class="meter-row"><span>ねじり量</span><strong id="twist-value">0%</strong></div>
+              <div class="meter-track"><div id="twist-meter" class="meter-fill"></div></div>
+            </div>
             <div class="debug-grid">
               <div class="debug-cell"><span>骨格検出</span><strong id="pose-state">待機中</strong></div>
               <div class="debug-cell"><span>基準姿勢</span><strong id="calibration-state">未設定</strong></div>
@@ -867,13 +953,14 @@
               <div class="debug-cell"><span>撃破数</span><strong id="defeat-count">0</strong></div>
               <div class="debug-cell"><span>横曲げ方向</span><strong id="bend-direction">中央</strong></div>
               <div class="debug-cell"><span>回避数</span><strong id="avoid-count">0</strong></div>
+              <div class="debug-cell"><span>反射数</span><strong id="reflect-count">0</strong></div>
             </div>
             <button id="recalibrate-button" class="secondary-button" disabled>基準姿勢を測り直す</button>
           </section>
 
           <section class="panel">
             <h3>判定について</h3>
-            <p class="notice">開始前に肩幅・胴体長・脚長を画面内の相対値として測定します。ジャンプは練習時の腰の上昇量に合わせ、横曲げは肩幅で割って体格差を抑えます。カメラ映像は保存しません。</p>
+            <p class="notice">開始前に肩幅・胴体長・脚長を画面内の相対値として測定します。ねじりは正面時より肩幅が小さく見える変化を使い、練習時のねじり量に合わせて反射判定を調整します。カメラ映像は保存しません。</p>
           </section>
         </aside>
       </section>
@@ -920,13 +1007,17 @@
       const bendMeter = document.querySelector("#bend-meter");
       const bendValue = document.querySelector("#bend-value");
       const bendDirectionLabel = document.querySelector("#bend-direction");
+      const twistMeter = document.querySelector("#twist-meter");
+      const twistValue = document.querySelector("#twist-value");
       const enemyZone = document.querySelector("#enemy-zone");
       const enemyNumber = document.querySelector("#enemy-number");
       const scoreLabel = document.querySelector("#score");
       const defeatCountLabel = document.querySelector("#defeat-count");
       const avoidCountLabel = document.querySelector("#avoid-count");
+      const reflectCountLabel = document.querySelector("#reflect-count");
       const obstacleZone = document.querySelector("#obstacle-zone");
       const obstacleWarning = document.querySelector("#obstacle-warning");
+      const reflectZone = document.querySelector("#reflect-zone");
       const missionText = document.querySelector("#mission-text");
       const impactText = document.querySelector("#impact-text");
 
@@ -951,6 +1042,12 @@
       let obstacleStartedAt = 0;
       let nextObstacleAt = Infinity;
       let avoided = 0;
+      let bossAttackActive = false;
+      let bossAttackResolved = false;
+      let bossAttackStartedAt = 0;
+      let nextBossAttackAt = Infinity;
+      let reflectedAttacks = 0;
+      let twistReflectThreshold = 0.13;
       let gameMode = "calibration";
       let trainingStage = 0;
       let trainingLocked = false;
@@ -977,6 +1074,8 @@
       const BEND_THRESHOLD = 0.30;
       const OBSTACLE_CHECK_DELAY_MS = 1050;
       const OBSTACLE_TIMEOUT_MS = 2850;
+      const REFLECT_CHECK_DELAY_MS = 550;
+      const REFLECT_TIMEOUT_MS = 2950;
 
       function setStatus(title, detail) {
         statusTitle.textContent = title;
@@ -1053,6 +1152,13 @@
         obstacleResolved = false;
         obstacleSide = null;
         nextObstacleAt = Infinity;
+        bossAttackActive = false;
+        bossAttackResolved = false;
+        nextBossAttackAt = Infinity;
+        reflectZone.className = "reflect-zone";
+        reflectZone.setAttribute("aria-hidden", "true");
+        twistMeter.style.width = "0%";
+        twistValue.textContent = "0%";
         trainingStage = 0;
         trainingLocked = false;
         trainingAirborne = false;
@@ -1065,6 +1171,7 @@
         maxDiagonalBend = 0;
         jumpHipThreshold = JUMP_HIP_THRESHOLD;
         jumpAnkleThreshold = JUMP_ANKLE_THRESHOLD;
+        twistReflectThreshold = 0.13;
         obstacleZone.className = "obstacle-zone";
         obstacleZone.setAttribute("aria-hidden", "true");
         bendMeter.style.width = "0%";
@@ -1197,9 +1304,10 @@
         gameMode = "summary";
         jumpHipThreshold = Math.max(0.035, Math.min(maxTrainingHipRise * 0.55, 0.07));
         jumpAnkleThreshold = Math.max(0.012, Math.min(jumpHipThreshold * 0.38, 0.026));
+        twistReflectThreshold = Math.max(0.09, Math.min(maxTwist * 0.62, 0.18));
         trainingProgress.textContent = "HERO SCAN COMPLETE";
         trainingTitle.textContent = "あなた専用の判定に調整しました";
-        trainingDescription.textContent = "身体の相対サイズと動ける範囲を、ゲームのジャンプ判定に反映します。";
+        trainingDescription.textContent = "身体の相対サイズと動ける範囲を、ジャンプとねじりの判定に反映します。";
         trainingCue.textContent = "準備完了！";
         demoPerson.className = "demo-person demo-complete";
         trainingFill.style.width = "100%";
@@ -1218,9 +1326,11 @@
       function beginBattle() {
         gameMode = "battle";
         trainingOverlay.classList.add("hidden");
-        nextObstacleAt = performance.now() + 5200;
-        missionText.textContent = "ジャンプと横曲げで戦え！";
-        setStatus("バトル開始 — ジャンプ！", "敵を踏み潰し、障害物が来たら横に曲げて避けてください");
+        const now = performance.now();
+        nextObstacleAt = now + 5200;
+        nextBossAttackAt = now + 8200;
+        missionText.textContent = "ジャンプ・横曲げ・ねじりで戦え！";
+        setStatus("バトル開始 — ジャンプ！", "横曲げで回避し、ボスの弾は体をねじって反射してください");
       }
 
       function updateJumpDetector(lm) {
@@ -1285,6 +1395,14 @@
 
         if (gameMode !== "battle") return;
 
+        if (updateBossAttack(lm, now)) {
+          if (!airborne && Math.abs(hipRise) < 0.014) {
+            baselineHipY = baselineHipY * 0.997 + hipY * 0.003;
+            baselineAnkleY = baselineAnkleY * 0.997 + ankleY * 0.003;
+          }
+          return;
+        }
+
         updateBendDetector(lm, now);
 
         if (obstacleActive) {
@@ -1332,7 +1450,7 @@
         bendValue.textContent = `${direction} ${Math.round(bendAmount * 100)}%`;
         bendDirectionLabel.textContent = direction;
 
-        if (!obstacleActive && !airborne && enemyReady && now >= nextObstacleAt) {
+        if (!obstacleActive && !bossAttackActive && !airborne && enemyReady && now >= nextObstacleAt) {
           startObstacle(now);
           return;
         }
@@ -1350,6 +1468,80 @@
         } else if (elapsed >= OBSTACLE_TIMEOUT_MS) {
           finishObstacle(false);
         }
+      }
+
+      function updateBossAttack(lm, now) {
+        const shoulderWidth = Math.max(Math.abs(lm[11].x - lm[12].x), 0.04);
+        const compression = Math.max(0, 1 - shoulderWidth / Math.max(baselineShoulderWidth, 0.04));
+        const twistRatio = Math.min(compression / Math.max(twistReflectThreshold, 0.01), 1.25);
+        twistMeter.style.width = `${Math.min(twistRatio * 100, 100)}%`;
+        twistValue.textContent = `${Math.round(twistRatio * 100)}%`;
+
+        if (!bossAttackActive && !obstacleActive && !airborne && enemyReady && now >= nextBossAttackAt) {
+          startBossAttack(now);
+        }
+
+        if (!bossAttackActive) return false;
+        if (bossAttackResolved) return true;
+
+        const shoulderX = average(lm[11].x, lm[12].x);
+        const hipX = average(lm[23].x, lm[24].x);
+        const bendRatio = Math.abs(hipX - shoulderX) / Math.max(baselineShoulderWidth, 0.08);
+        const elapsed = now - bossAttackStartedAt;
+        const twistedWithoutSideBend = compression >= twistReflectThreshold && bendRatio < 0.27;
+
+        if (elapsed >= REFLECT_CHECK_DELAY_MS && twistedWithoutSideBend) {
+          finishBossAttack(true);
+        } else if (elapsed >= REFLECT_TIMEOUT_MS) {
+          finishBossAttack(false);
+        }
+        return true;
+      }
+
+      function startBossAttack(now) {
+        bossAttackActive = true;
+        bossAttackResolved = false;
+        bossAttackStartedAt = now;
+        reflectZone.className = "reflect-zone incoming";
+        reflectZone.setAttribute("aria-hidden", "false");
+        missionText.textContent = "体をねじって攻撃を跳ね返せ！";
+        setStatus("ボスのエネルギー弾！", "脚と腰を中央に保ち、腕を振りながら上体を大きくねじってください");
+      }
+
+      function finishBossAttack(success) {
+        if (bossAttackResolved) return;
+        bossAttackResolved = true;
+
+        if (success) {
+          score += 150;
+          reflectedAttacks += 1;
+          scoreLabel.textContent = String(score).padStart(4, "0");
+          reflectCountLabel.textContent = String(reflectedAttacks);
+          reflectZone.classList.add("reflected");
+          enemyZone.classList.add("boss-hit");
+          impactText.textContent = "REFLECT!";
+          impactText.classList.add("dodge");
+          impactText.classList.remove("show");
+          void impactText.offsetWidth;
+          impactText.classList.add("show");
+          setStatus("反射成功！", "ねじりの力でボスへ150点のダメージ！");
+        } else {
+          reflectZone.classList.add("hit");
+          setStatus("攻撃を受けた！", "次は弾が近づいたら、横へ曲げずに上体をねじりましょう");
+        }
+
+        const now = performance.now();
+        nextBossAttackAt = now + 7200 + Math.random() * 2800;
+        nextObstacleAt = Math.max(nextObstacleAt, now + 3200);
+        window.setTimeout(() => {
+          bossAttackActive = false;
+          bossAttackResolved = false;
+          reflectZone.className = "reflect-zone";
+          reflectZone.setAttribute("aria-hidden", "true");
+          enemyZone.classList.remove("boss-hit");
+          missionText.textContent = "ジャンプ・横曲げ・ねじりで戦え！";
+          if (!airborne) setStatus("次の攻撃に備えよう！", "ジャンプで攻撃、横曲げで回避、ねじりで反射！");
+        }, 1050);
       }
 
       function startObstacle(now) {
@@ -1393,8 +1585,8 @@
           obstacleResolved = false;
           obstacleZone.className = "obstacle-zone";
           obstacleZone.setAttribute("aria-hidden", "true");
-          missionText.textContent = "ジャンプと横曲げで戦え！";
-          if (!airborne) setStatus("次の動きに備えよう！", "ジャンプで攻撃。障害物が来たら反対側へ曲げて回避！");
+          missionText.textContent = "ジャンプ・横曲げ・ねじりで戦え！";
+          if (!airborne) setStatus("次の動きに備えよう！", "ジャンプで攻撃、横曲げで回避、ねじりで反射！");
         }, 950);
       }
 
