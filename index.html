@@ -435,6 +435,51 @@
       .start-card h2 em { color: var(--lime); font-style: normal; }
       .start-card p { color: var(--muted); line-height: 1.8; margin: 0 auto 24px; max-width: 440px; }
 
+      .training-overlay {
+        position: absolute;
+        inset: 0;
+        z-index: 9;
+        display: grid;
+        place-items: center;
+        padding: 20px;
+        background: linear-gradient(180deg, rgba(3, 9, 19, .68), rgba(3, 9, 19, .9));
+        transition: opacity .3s ease, visibility .3s ease;
+      }
+
+      .training-overlay.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+
+      .training-card {
+        width: min(620px, 100%);
+        padding: clamp(22px, 4vw, 38px);
+        border: 1px solid rgba(83, 237, 255, .34);
+        border-radius: 24px;
+        background: rgba(7, 18, 34, .94);
+        box-shadow: 0 26px 70px rgba(0, 0, 0, .46);
+        text-align: center;
+      }
+
+      .training-progress { color: var(--cyan); font-size: .75rem; font-weight: 900; letter-spacing: .16em; }
+      .training-card h2 { margin: 10px 0 8px; font-size: clamp(1.7rem, 5vw, 2.7rem); }
+      .training-card > p { margin: 0 auto 18px; max-width: 510px; color: var(--muted); line-height: 1.7; }
+      .training-cue { color: var(--lime); font-size: 1.05rem; font-weight: 900; min-height: 1.7em; }
+      .training-track { height: 12px; margin: 18px 0 10px; overflow: hidden; border-radius: 999px; background: rgba(255,255,255,.1); }
+      .training-fill { width: 0; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--cyan), var(--lime)); transition: width .12s linear; }
+      .training-dots { display: flex; justify-content: center; gap: 9px; margin-top: 18px; }
+      .training-dot { width: 10px; height: 10px; border-radius: 50%; background: rgba(255,255,255,.18); }
+      .training-dot.active { background: var(--cyan); box-shadow: 0 0 12px rgba(83,237,255,.8); }
+      .training-dot.done { background: var(--lime); }
+      .scan-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 20px 0; }
+      .scan-item { padding: 13px 8px; border: 1px solid rgba(125,190,255,.2); border-radius: 14px; background: rgba(255,255,255,.04); }
+      .scan-item span { display: block; color: var(--muted); font-size: .7rem; }
+      .scan-item strong { display: block; margin-top: 4px; color: var(--lime); font-size: 1rem; }
+      .training-actions { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+      .training-note { margin-top: 15px !important; font-size: .72rem; }
+
+      @media (max-width: 620px) {
+        .scan-grid { grid-template-columns: repeat(2, 1fr); }
+        .training-card { padding: 20px 16px; }
+      }
+
       .primary-button, .secondary-button {
         cursor: pointer;
         border: 0;
@@ -656,6 +701,32 @@
               <p class="safety">安全のため、周囲と頭上に十分なスペースを確保してください。</p>
             </div>
           </div>
+
+          <div id="training-overlay" class="training-overlay hidden" aria-live="polite">
+            <div class="training-card">
+              <div id="training-progress" class="training-progress">HERO SCAN</div>
+              <h2 id="training-title">身体スキャン</h2>
+              <p id="training-description">正面を向き、頭から足先まで映してください。</p>
+              <div id="training-cue" class="training-cue">準備中…</div>
+              <div class="training-track"><div id="training-fill" class="training-fill"></div></div>
+              <div id="training-dots" class="training-dots" aria-hidden="true">
+                <span class="training-dot active"></span><span class="training-dot"></span><span class="training-dot"></span>
+              </div>
+              <div id="scan-summary" class="scan-grid" hidden>
+                <div class="scan-item"><span>肩幅</span><strong id="scan-shoulder">—</strong></div>
+                <div class="scan-item"><span>胴体</span><strong id="scan-torso">—</strong></div>
+                <div class="scan-item"><span>脚</span><strong id="scan-leg">—</strong></div>
+                <div class="scan-item"><span>ねじり</span><strong id="scan-twist">—</strong></div>
+                <div class="scan-item"><span>ジャンプ</span><strong id="scan-jump">—</strong></div>
+                <div class="scan-item"><span>前屈</span><strong id="scan-bend">—</strong></div>
+              </div>
+              <div id="training-actions" class="training-actions" hidden>
+                <button id="battle-button" class="primary-button">バトル開始</button>
+                <button id="retry-scan-button" class="secondary-button">もう一度測る</button>
+              </div>
+              <p class="training-note">痛みを感じる動きは中止してください。表示値はカメラ上の相対値で、医療用の測定ではありません。</p>
+            </div>
+          </div>
         </div>
 
         <aside class="sidebar">
@@ -663,8 +734,8 @@
             <h3>遊び方</h3>
             <div class="steps">
               <div class="step"><span class="step-number">1</span><div><strong>全身を映す</strong><span>頭から足先までカメラに入る位置へ移動します。</span></div></div>
-              <div class="step"><span class="step-number">2</span><div><strong>その場で静止</strong><span>約1.5秒立つと、基準の高さを自動測定します。</span></div></div>
-              <div class="step"><span class="step-number">3</span><div><strong>無理なくジャンプ</strong><span>腰が基準より上がると必殺技が発動します。</span></div></div>
+              <div class="step"><span class="step-number">2</span><div><strong>ヒーロースキャン</strong><span>ねじる・両脚跳び・斜め下から胸を開く、の3種目で個人調整します。</span></div></div>
+              <div class="step"><span class="step-number">3</span><div><strong>ジャンプで攻撃</strong><span>測定した跳び幅に合わせて必殺技が発動します。</span></div></div>
               <div class="step"><span class="step-number">4</span><div><strong>横に曲げて回避</strong><span>障害物が来た方向と反対側へ、上体をゆっくり曲げます。</span></div></div>
             </div>
           </section>
@@ -690,7 +761,7 @@
 
           <section class="panel">
             <h3>判定について</h3>
-            <p class="notice">ジャンプは腰と足首の上昇量、横曲げは両肩の中心が両腰の中心からどれだけ左右へ移動したかで判定します。体格差を小さくするため、横曲げ量は肩幅で割って正規化します。カメラ映像は保存しません。</p>
+            <p class="notice">開始前に肩幅・胴体長・脚長を画面内の相対値として測定します。ジャンプは練習時の腰の上昇量に合わせ、横曲げは肩幅で割って体格差を抑えます。カメラ映像は保存しません。</p>
           </section>
         </aside>
       </section>
@@ -709,6 +780,17 @@
       const shell = document.querySelector("#game-shell");
       const startButton = document.querySelector("#start-button");
       const startOverlay = document.querySelector("#start-overlay");
+      const trainingOverlay = document.querySelector("#training-overlay");
+      const trainingProgress = document.querySelector("#training-progress");
+      const trainingTitle = document.querySelector("#training-title");
+      const trainingDescription = document.querySelector("#training-description");
+      const trainingCue = document.querySelector("#training-cue");
+      const trainingFill = document.querySelector("#training-fill");
+      const trainingDots = [...document.querySelectorAll(".training-dot")];
+      const scanSummary = document.querySelector("#scan-summary");
+      const trainingActions = document.querySelector("#training-actions");
+      const battleButton = document.querySelector("#battle-button");
+      const retryScanButton = document.querySelector("#retry-scan-button");
       const recalibrateButton = document.querySelector("#recalibrate-button");
       const connection = document.querySelector("#connection");
       const connectionLabel = document.querySelector("#connection-label");
@@ -752,6 +834,23 @@
       let obstacleStartedAt = 0;
       let nextObstacleAt = Infinity;
       let avoided = 0;
+      let gameMode = "calibration";
+      let trainingStage = 0;
+      let trainingLocked = false;
+      let trainingAirborne = false;
+      let trainingJumpCount = 0;
+      let twistPeakCount = 0;
+      let twistAway = false;
+      let diagonalDownSeen = false;
+      let maxTwist = 0;
+      let maxTrainingHipRise = 0;
+      let maxDiagonalBend = 0;
+      let baselineShoulderY = null;
+      let baselineShoulderWidth = null;
+      let baselineTorsoLength = null;
+      let baselineLegLength = null;
+      let jumpHipThreshold = 0.052;
+      let jumpAnkleThreshold = 0.018;
 
       const CALIBRATION_FRAMES = 42;
       const JUMP_HIP_THRESHOLD = 0.052;
@@ -780,9 +879,30 @@
         return sorted[Math.floor(sorted.length / 2)];
       }
 
+      function distance(a, b) {
+        return Math.hypot(a.x - b.x, a.y - b.y);
+      }
+
+      function jointAngle(a, b, c) {
+        const ab = { x: a.x - b.x, y: a.y - b.y };
+        const cb = { x: c.x - b.x, y: c.y - b.y };
+        const cosine = (ab.x * cb.x + ab.y * cb.y) /
+          Math.max(Math.hypot(ab.x, ab.y) * Math.hypot(cb.x, cb.y), 0.0001);
+        return Math.acos(Math.max(-1, Math.min(1, cosine))) * 180 / Math.PI;
+      }
+
+      function relativeLabel(value) {
+        return `画面比 ${Math.round(value * 100)}%`;
+      }
+
       function resetCalibration() {
+        gameMode = "calibration";
         baselineHipY = null;
         baselineAnkleY = null;
+        baselineShoulderY = null;
+        baselineShoulderWidth = null;
+        baselineTorsoLength = null;
+        baselineLegLength = null;
         calibrationSamples = [];
         airborne = false;
         attackArmed = false;
@@ -791,13 +911,34 @@
         obstacleResolved = false;
         obstacleSide = null;
         nextObstacleAt = Infinity;
+        trainingStage = 0;
+        trainingLocked = false;
+        trainingAirborne = false;
+        trainingJumpCount = 0;
+        twistPeakCount = 0;
+        twistAway = false;
+        diagonalDownSeen = false;
+        maxTwist = 0;
+        maxTrainingHipRise = 0;
+        maxDiagonalBend = 0;
+        jumpHipThreshold = JUMP_HIP_THRESHOLD;
+        jumpAnkleThreshold = JUMP_ANKLE_THRESHOLD;
         obstacleZone.className = "obstacle-zone";
         obstacleZone.setAttribute("aria-hidden", "true");
         bendMeter.style.width = "0%";
         bendValue.textContent = "中央 0%";
         bendDirectionLabel.textContent = "中央";
         calibrationState.textContent = "測定中";
-        setStatus("その場で静止してください", "基準となる腰の高さを測定しています");
+        trainingOverlay.classList.remove("hidden");
+        scanSummary.hidden = true;
+        trainingActions.hidden = true;
+        trainingDots.forEach((dot, index) => dot.className = `training-dot${index === 0 ? " active" : ""}`);
+        trainingProgress.textContent = "HERO SCAN 0/3";
+        trainingTitle.textContent = "身体サイズを確認中";
+        trainingDescription.textContent = "正面を向き、頭から足先まで映したまま静止してください。";
+        trainingCue.textContent = "まっすぐ立ってください";
+        trainingFill.style.width = "0%";
+        setStatus("その場で静止してください", "カメラ上の身体スケールと基準姿勢を測定しています");
       }
 
       function fullBodyVisible(lm) {
@@ -806,6 +947,135 @@
       }
 
       function average(a, b) { return (a + b) / 2; }
+
+      function startTraining() {
+        gameMode = "training";
+        trainingStage = 0;
+        setTrainingStage(0);
+      }
+
+      function setTrainingStage(stage) {
+        trainingStage = stage;
+        trainingLocked = false;
+        trainingFill.style.width = "0%";
+        trainingDots.forEach((dot, index) => {
+          dot.className = `training-dot${index < stage ? " done" : index === stage ? " active" : ""}`;
+        });
+
+        const stages = [
+          ["1/3", "体をねじる運動", "脚を動かさず、腕を振りながら上体を左右へ2回ねじります。", "左右へ大きく、中央まで戻る"],
+          ["2/3", "両脚で跳ぶ運動", "両脚をそろえ、無理のない高さで軽く2回跳びます。", "軽く2回ジャンプ"],
+          ["3/3", "斜め下に曲げ、胸を反らす運動", "両手を片方の足先へ近づけたあと、上体を起こして胸を開きます。", "斜め下 → 胸を開く"],
+        ];
+        const [progress, title, description, cue] = stages[stage];
+        trainingProgress.textContent = `HERO SCAN ${progress}`;
+        trainingTitle.textContent = title;
+        trainingDescription.textContent = description;
+        trainingCue.textContent = cue;
+        setStatus(title, description);
+      }
+
+      function completeTrainingStage() {
+        if (trainingLocked) return;
+        trainingLocked = true;
+        trainingFill.style.width = "100%";
+        trainingCue.textContent = "OK! きれいに検出できました";
+        trainingDots[trainingStage].className = "training-dot done";
+        window.setTimeout(() => {
+          if (trainingStage < 2) setTrainingStage(trainingStage + 1);
+          else finishTraining();
+        }, 850);
+      }
+
+      function updateTraining(lm, hipY, ankleY) {
+        if (trainingLocked) return;
+        const shoulderWidth = Math.max(Math.abs(lm[11].x - lm[12].x), 0.04);
+        const shoulderY = average(lm[11].y, lm[12].y);
+        const hipX = average(lm[23].x, lm[24].x);
+
+        if (trainingStage === 0) {
+          const compression = Math.max(0, 1 - shoulderWidth / Math.max(baselineShoulderWidth, 0.04));
+          maxTwist = Math.max(maxTwist, compression);
+          if (!twistAway && compression > 0.13) twistAway = true;
+          if (twistAway && compression < 0.07) {
+            twistPeakCount += 1;
+            twistAway = false;
+          }
+          const progress = Math.min((twistPeakCount + Math.min(compression / 0.13, 1)) / 2, 1);
+          trainingFill.style.width = `${progress * 100}%`;
+          trainingCue.textContent = twistPeakCount === 0 ? "ねじって中央へ戻る（1回目）" : "反対側もねじって戻る（2回目）";
+          if (twistPeakCount >= 2) completeTrainingStage();
+          return;
+        }
+
+        if (trainingStage === 1) {
+          const hipRise = baselineHipY - hipY;
+          const ankleRise = baselineAnkleY - ankleY;
+          maxTrainingHipRise = Math.max(maxTrainingHipRise, hipRise);
+          if (!trainingAirborne && hipRise > 0.035 && ankleRise > 0.012) trainingAirborne = true;
+          if (trainingAirborne && Math.abs(hipRise) < 0.018) {
+            trainingAirborne = false;
+            trainingJumpCount += 1;
+          }
+          const activeJump = trainingAirborne ? Math.min(hipRise / 0.05, 1) : 0;
+          trainingFill.style.width = `${Math.min((trainingJumpCount + activeJump) / 2, 1) * 100}%`;
+          trainingCue.textContent = `${Math.min(trainingJumpCount, 2)}/2回　両脚をそろえて軽くジャンプ`;
+          if (trainingJumpCount >= 2) completeTrainingStage();
+          return;
+        }
+
+        const torso = Math.max(baselineTorsoLength, 0.1);
+        const shoulderDrop = (shoulderY - baselineShoulderY) / torso;
+        const wristX = average(lm[15].x, lm[16].x);
+        const diagonalOffset = Math.abs(wristX - hipX) / Math.max(baselineShoulderWidth, 0.08);
+        maxDiagonalBend = Math.max(maxDiagonalBend, shoulderDrop);
+        if (!diagonalDownSeen && shoulderDrop > 0.22 && diagonalOffset > 0.28) diagonalDownSeen = true;
+
+        if (!diagonalDownSeen) {
+          const progress = Math.min(Math.max(shoulderDrop / 0.22, diagonalOffset / 0.28), 1) * 50;
+          trainingFill.style.width = `${progress}%`;
+          trainingCue.textContent = "両手を片方の足先へ近づける";
+          return;
+        }
+
+        const leftElbow = jointAngle(lm[11], lm[13], lm[15]);
+        const rightElbow = jointAngle(lm[12], lm[14], lm[16]);
+        const upright = Math.abs(shoulderY - baselineShoulderY) < torso * 0.22;
+        const armsOpen = leftElbow > 145 && rightElbow > 145 &&
+          Math.abs(lm[15].x - lm[16].x) > baselineShoulderWidth * 1.15;
+        trainingFill.style.width = `${upright && armsOpen ? 100 : 65}%`;
+        trainingCue.textContent = "上体を起こし、ひじを伸ばして胸を開く";
+        if (upright && armsOpen) completeTrainingStage();
+      }
+
+      function finishTraining() {
+        gameMode = "summary";
+        jumpHipThreshold = Math.max(0.035, Math.min(maxTrainingHipRise * 0.55, 0.07));
+        jumpAnkleThreshold = Math.max(0.012, Math.min(jumpHipThreshold * 0.38, 0.026));
+        trainingProgress.textContent = "HERO SCAN COMPLETE";
+        trainingTitle.textContent = "あなた専用の判定に調整しました";
+        trainingDescription.textContent = "身体の相対サイズと動ける範囲を、ゲームのジャンプ判定に反映します。";
+        trainingCue.textContent = "準備完了！";
+        trainingFill.style.width = "100%";
+        scanSummary.hidden = false;
+        trainingActions.hidden = false;
+        document.querySelector("#scan-shoulder").textContent = relativeLabel(baselineShoulderWidth);
+        document.querySelector("#scan-torso").textContent = relativeLabel(baselineTorsoLength);
+        document.querySelector("#scan-leg").textContent = relativeLabel(baselineLegLength);
+        document.querySelector("#scan-twist").textContent = `${Math.round(maxTwist * 100)}%`;
+        document.querySelector("#scan-jump").textContent = `${Math.round(maxTrainingHipRise * 100)}%`;
+        document.querySelector("#scan-bend").textContent = `${Math.round(maxDiagonalBend * 100)}%`;
+        calibrationState.textContent = "個人調整済み";
+        setStatus("ヒーロースキャン完了", "画面の「バトル開始」を押してください");
+      }
+
+      function beginBattle() {
+        gameMode = "battle";
+        trainingOverlay.classList.add("hidden");
+        nextObstacleAt = performance.now() + 5200;
+        missionText.textContent = "ジャンプと横曲げで戦え！";
+        setStatus("バトル開始 — ジャンプ！", "敵を踏み潰し、障害物が来たら横に曲げて避けてください");
+      }
 
       function updateJumpDetector(lm) {
         const now = performance.now();
@@ -825,28 +1095,49 @@
         poseState.textContent = "検出中";
 
         if (baselineHipY == null) {
-          calibrationSamples.push({ hipY, ankleY });
+          const shoulderY = average(lm[11].y, lm[12].y);
+          const shoulderWidth = Math.abs(lm[11].x - lm[12].x);
+          const torsoLength = distance(
+            { x: average(lm[11].x, lm[12].x), y: shoulderY },
+            { x: average(lm[23].x, lm[24].x), y: hipY }
+          );
+          const legLength = average(
+            distance(lm[23], lm[25]) + distance(lm[25], lm[27]),
+            distance(lm[24], lm[26]) + distance(lm[26], lm[28])
+          );
+          calibrationSamples.push({ hipY, ankleY, shoulderY, shoulderWidth, torsoLength, legLength });
           const progress = Math.min(calibrationSamples.length / CALIBRATION_FRAMES, 1);
           jumpMeter.style.width = `${progress * 100}%`;
           jumpValue.textContent = `${Math.round(progress * 100)}%`;
+          trainingFill.style.width = `${progress * 100}%`;
 
           if (calibrationSamples.length >= CALIBRATION_FRAMES) {
             baselineHipY = median(calibrationSamples.map((sample) => sample.hipY));
             baselineAnkleY = median(calibrationSamples.map((sample) => sample.ankleY));
-            calibrationState.textContent = "完了";
+            baselineShoulderY = median(calibrationSamples.map((sample) => sample.shoulderY));
+            baselineShoulderWidth = median(calibrationSamples.map((sample) => sample.shoulderWidth));
+            baselineTorsoLength = median(calibrationSamples.map((sample) => sample.torsoLength));
+            baselineLegLength = median(calibrationSamples.map((sample) => sample.legLength));
+            calibrationState.textContent = "動作確認中";
             recalibrateButton.disabled = false;
-            nextObstacleAt = now + 5200;
-            setStatus("準備完了 — ジャンプ！", "敵を踏み潰し、障害物が来たら横に曲げて避けてください");
+            startTraining();
           }
           return;
         }
 
         const hipRise = baselineHipY - hipY;
         const ankleRise = baselineAnkleY - ankleY;
-        const jumpRatio = Math.max(0, Math.min(hipRise / JUMP_HIP_THRESHOLD, 1.25));
+        const jumpRatio = Math.max(0, Math.min(hipRise / jumpHipThreshold, 1.25));
         jumpMeter.style.width = `${Math.min(jumpRatio * 100, 100)}%`;
         jumpValue.textContent = `${Math.round(jumpRatio * 100)}%`;
         hipDeltaLabel.textContent = hipRise.toFixed(3);
+
+        if (gameMode === "training") {
+          updateTraining(lm, hipY, ankleY);
+          return;
+        }
+
+        if (gameMode !== "battle") return;
 
         updateBendDetector(lm, now);
 
@@ -862,7 +1153,7 @@
         const rising = hipVelocity < -0.00012;
 
         if (!airborne && cooldownComplete && enemyReady && rising &&
-            hipRise > JUMP_HIP_THRESHOLD && ankleRise > JUMP_ANKLE_THRESHOLD) {
+            hipRise > jumpHipThreshold && ankleRise > jumpAnkleThreshold) {
           airborne = true;
           attackArmed = true;
           lastJumpAt = now;
@@ -1086,6 +1377,8 @@
 
       startButton.addEventListener("click", startGame);
       recalibrateButton.addEventListener("click", resetCalibration);
+      battleButton.addEventListener("click", beginBattle);
+      retryScanButton.addEventListener("click", resetCalibration);
       window.addEventListener("resize", resizeCanvas);
     </script>
   </body>
