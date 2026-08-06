@@ -108,6 +108,25 @@
         font-size: 0.82rem;
       }
 
+      .top-actions { display: flex; align-items: center; gap: 9px; }
+
+      .sound-toggle {
+        cursor: pointer;
+        min-width: 94px;
+        padding: 10px 13px;
+        border: 1px solid rgba(135,185,255,.24);
+        border-radius: 999px;
+        background: rgba(8,20,38,.78);
+        color: var(--cyan);
+        font: inherit;
+        font-size: .76rem;
+        font-weight: 850;
+        transition: border-color .2s ease, background .2s ease, color .2s ease;
+      }
+
+      .sound-toggle:hover { border-color: rgba(83,237,255,.65); }
+      .sound-toggle.muted { color: var(--muted); background: rgba(8,20,38,.45); }
+
       .connection-dot {
         width: 9px;
         height: 9px;
@@ -832,6 +851,9 @@
       @media (max-width: 620px) {
         .app { width: min(100% - 18px, 1280px); padding-top: 12px; }
         .brand p, .connection span { display: none; }
+        .sound-toggle { min-width: 46px; padding: 9px; font-size: 0; }
+        .sound-toggle::before { content: "♪"; font-size: 1rem; }
+        .sound-toggle.muted::before { content: "×"; }
         .game-shell { min-height: 70vh; border-radius: 20px; }
         .hud { padding: 12px; }
         .mission { max-width: 62%; }
@@ -859,9 +881,12 @@
             <p>JUMP STRIKE — MEDIAPIPE PROTOTYPE</p>
           </div>
         </div>
-        <div id="connection" class="connection" aria-live="polite">
-          <i class="connection-dot"></i>
-          <span id="connection-label">カメラ未接続</span>
+        <div class="top-actions">
+          <button id="sound-toggle" class="sound-toggle" type="button" aria-pressed="true">効果音 ON</button>
+          <div id="connection" class="connection" aria-live="polite">
+            <i class="connection-dot"></i>
+            <span id="connection-label">カメラ未接続</span>
+          </div>
         </div>
       </header>
 
@@ -1040,6 +1065,7 @@
       const canvas = document.querySelector("#pose-canvas");
       const ctx = canvas.getContext("2d");
       const shell = document.querySelector("#game-shell");
+      const soundToggle = document.querySelector("#sound-toggle");
       const startButton = document.querySelector("#start-button");
       const startOverlay = document.querySelector("#start-overlay");
       const trainingOverlay = document.querySelector("#training-overlay");
@@ -1092,6 +1118,26 @@
       const reflectZone = document.querySelector("#reflect-zone");
       const missionText = document.querySelector("#mission-text");
       const impactText = document.querySelector("#impact-text");
+
+      const soundFiles = {
+        reflect: "assets/sounds/reflect.mp3",
+        swordDraw: "assets/sounds/sword-draw.mp3",
+        impactText: "assets/sounds/impact-text.mp3",
+        dodgeWhoosh: "assets/sounds/dodge-whoosh.mp3",
+        bossWarning: "assets/sounds/boss-warning.mp3",
+        confirmPrimary: "assets/sounds/confirm-primary.mp3",
+        dataDisplay: "assets/sounds/data-display.mp3",
+        confirmSecondary: "assets/sounds/confirm-secondary.mp3",
+        landing: "assets/sounds/landing.mp3",
+        jump: "assets/sounds/jump.mp3",
+        obstacleWarning: "assets/sounds/obstacle-warning.mp3",
+      };
+      const sounds = Object.fromEntries(Object.entries(soundFiles).map(([name, src]) => {
+        const audio = new Audio(src);
+        audio.preload = "auto";
+        return [name, audio];
+      }));
+      let soundEnabled = true;
 
       let landmarker;
       let drawingUtils;
@@ -1154,6 +1200,24 @@
       const REFLECT_TIMEOUT_MS = 2950;
       const BATTLE_DURATION_MS = 5 * 60 * 1000;
       const RESULT_DISPLAY_MS = 10 * 1000;
+
+      function playSound(name, volume = 0.72) {
+        if (!soundEnabled || !sounds[name]) return;
+        const audio = sounds[name];
+        audio.pause();
+        audio.currentTime = 0;
+        audio.volume = Math.max(0, Math.min(volume, 1));
+        audio.play().catch(() => {});
+      }
+
+      function toggleSound() {
+        soundEnabled = !soundEnabled;
+        soundToggle.classList.toggle("muted", !soundEnabled);
+        soundToggle.textContent = soundEnabled ? "効果音 ON" : "効果音 OFF";
+        soundToggle.setAttribute("aria-pressed", String(soundEnabled));
+        if (soundEnabled) playSound("confirmSecondary", 0.55);
+        else Object.values(sounds).forEach((audio) => audio.pause());
+      }
 
       function setStatus(title, detail) {
         statusTitle.textContent = title;
@@ -1327,6 +1391,7 @@
         trainingCue.textContent = cue;
         demoPerson.className = `demo-person ${["demo-twist", "demo-jump", "demo-diagonal"][stage]}`;
         setStatus(title, description);
+        playSound("dataDisplay", 0.5);
       }
 
       function completeTrainingStage() {
@@ -1335,6 +1400,7 @@
         trainingFill.style.width = "100%";
         trainingCue.textContent = "OK! きれいに検出できました";
         trainingDots[trainingStage].className = "training-dot done";
+        playSound("confirmPrimary", 0.55);
         window.setTimeout(() => {
           if (trainingStage < 2) setTrainingStage(trainingStage + 1);
           else finishTraining();
@@ -1423,6 +1489,7 @@
         document.querySelector("#scan-bend").textContent = `${Math.round(maxDiagonalBend * 100)}%`;
         calibrationState.textContent = "個人調整済み";
         setStatus("ヒーロースキャン完了", "画面の「バトル開始」を押してください");
+        playSound("impactText", 0.6);
       }
 
       function beginBattle() {
@@ -1436,6 +1503,7 @@
         nextBossAttackAt = now + 8200;
         missionText.textContent = "ジャンプ・横曲げ・ねじりで戦え！";
         setStatus("バトル開始 — ジャンプ！", "横曲げで回避し、ボスの弾は体をねじって反射してください");
+        playSound("swordDraw", 0.68);
       }
 
       function updateBattleClock(now) {
@@ -1472,6 +1540,7 @@
         resultReturnAt = now + RESULT_DISPLAY_MS;
         returnCountdown.textContent = "10";
         resultOverlay.classList.remove("hidden");
+        playSound("dataDisplay", 0.72);
         window.clearTimeout(returnTopTimer);
         returnTopTimer = window.setTimeout(returnToTop, RESULT_DISPLAY_MS);
       }
@@ -1600,6 +1669,7 @@
           attackArmed = true;
           lastJumpAt = now;
           setStatus("ジャンプストライク準備！", "敵の上へ着地して踏み潰してください");
+          playSound("jump", 0.7);
         }
 
         if (airborne && Math.abs(hipRise) < LANDING_THRESHOLD) {
@@ -1684,6 +1754,7 @@
         reflectZone.setAttribute("aria-hidden", "false");
         missionText.textContent = "体をねじって攻撃を跳ね返せ！";
         setStatus("ボスのエネルギー弾！", "脚と腰を中央に保ち、腕を振りながら上体を大きくねじってください");
+        playSound("bossWarning", 0.7);
       }
 
       function finishBossAttack(success) {
@@ -1703,9 +1774,11 @@
           void impactText.offsetWidth;
           impactText.classList.add("show");
           setStatus("反射成功！", "ねじりの力でボスへ150点のダメージ！");
+          playSound("reflect", 0.82);
         } else {
           reflectZone.classList.add("hit");
           setStatus("攻撃を受けた！", "次は弾が近づいたら、横へ曲げずに上体をねじりましょう");
+          playSound("impactText", 0.62);
         }
 
         const now = performance.now();
@@ -1734,6 +1807,7 @@
         obstacleWarning.textContent = `${incomingLabel}から接近`;
         missionText.textContent = `${requiredLabel}へ曲げて避けろ！`;
         setStatus(`障害物！ ${requiredLabel}へ曲げる！`, "腰は中央に保ち、肩と上体を横へ曲げてください");
+        playSound("obstacleWarning", 0.68);
       }
 
       function finishObstacle(success) {
@@ -1752,9 +1826,11 @@
           void impactText.offsetWidth;
           impactText.classList.add("show");
           setStatus("回避成功！", "きれいな横曲げです。50点獲得！");
+          playSound("dodgeWhoosh", 0.72);
         } else {
           obstacleZone.classList.add("hit");
           setStatus("障害物に当たった！", "次は表示された方向へ、もう少し大きく曲げましょう");
+          playSound("impactText", 0.58);
         }
 
         nextObstacleAt = performance.now() + 6500 + Math.random() * 2500;
@@ -1781,6 +1857,8 @@
         void impactText.offsetWidth;
         impactText.classList.add("show");
         setStatus("必殺・スタンプクラッシュ！", "着地成功！ 敵を踏み潰しました");
+        playSound("landing", 0.82);
+        window.setTimeout(() => playSound("impactText", 0.54), 90);
         createParticles();
 
         window.setTimeout(() => {
@@ -1834,6 +1912,7 @@
       }
 
       async function startGame() {
+        playSound("confirmPrimary", 0.55);
         startButton.disabled = true;
         startButton.textContent = "準備しています…";
 
@@ -1900,10 +1979,20 @@
       }
 
       startButton.addEventListener("click", startGame);
-      recalibrateButton.addEventListener("click", resetCalibration);
+      soundToggle.addEventListener("click", toggleSound);
+      recalibrateButton.addEventListener("click", () => {
+        playSound("confirmSecondary", 0.52);
+        resetCalibration();
+      });
       battleButton.addEventListener("click", beginBattle);
-      retryScanButton.addEventListener("click", resetCalibration);
-      returnTopButton.addEventListener("click", returnToTop);
+      retryScanButton.addEventListener("click", () => {
+        playSound("confirmSecondary", 0.52);
+        resetCalibration();
+      });
+      returnTopButton.addEventListener("click", () => {
+        playSound("confirmSecondary", 0.52);
+        window.setTimeout(returnToTop, 120);
+      });
       window.addEventListener("resize", resizeCanvas);
     </script>
   </body>

@@ -21,6 +21,8 @@ Webカメラと MediaPipe Pose Landmarker を使って全身の姿勢を推定�
 - ボスのエネルギー弾と、上体のねじりによる反射判定
 - 5分間のバトルタイマーと、終了後のリザルト画面
 - 結果表示から10秒後にカメラを終了してトップ画面へ自動復帰
+- ジャンプ、着地、回避、警告、反射、画面切り替えなどの効果音
+- 画面上部の効果音ON／OFF切り替え
 - スコア、コンボ、ジャンプ量の表示
 
 ## 動かし方
@@ -89,6 +91,20 @@ http://localhost:4173
 - MediaPipe Tasks Vision
 - MediaPipe Pose Landmarker
 - Web Camera API
+- HTMLAudioElement
+
+## 効果音の割り当て
+
+- `jump.mp3`: ジャンプ開始
+- `landing.mp3`: 敵を踏み潰した着地
+- `obstacle-warning.mp3`: 障害物の接近
+- `dodge-whoosh.mp3`: 横曲げ回避成功
+- `boss-warning.mp3`: ボスのエネルギー弾
+- `reflect.mp3`: ねじり反射成功
+- `sword-draw.mp3`: ボス戦開始
+- `data-display.mp3`: 練習の切り替えと結果表示
+- `impact-text.mp3`: 攻撃演出と失敗
+- `confirm-primary.mp3` / `confirm-secondary.mp3`: ボタン操作と練習成功
 
 ## 注意事項
 
