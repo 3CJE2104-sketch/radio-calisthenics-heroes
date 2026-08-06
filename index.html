@@ -528,6 +528,37 @@
       .start-card h2 em { color: var(--lime); font-style: normal; }
       .start-card p { color: var(--muted); line-height: 1.8; margin: 0 auto 24px; max-width: 440px; }
 
+      .mode-picker {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin: 0 auto 13px;
+        max-width: 470px;
+      }
+
+      .mode-option {
+        cursor: pointer;
+        min-height: 104px;
+        padding: 14px 12px;
+        text-align: left;
+        color: #dcecff;
+        border: 1px solid rgba(125, 190, 255, .24);
+        border-radius: 16px;
+        background: rgba(3, 13, 28, .72);
+        transition: border-color .18s ease, background .18s ease, transform .18s ease, box-shadow .18s ease;
+      }
+
+      .mode-option:hover { transform: translateY(-2px); border-color: rgba(83, 237, 255, .55); }
+      .mode-option.selected {
+        border-color: var(--lime);
+        background: linear-gradient(145deg, rgba(83, 237, 255, .14), rgba(199, 255, 79, .09));
+        box-shadow: 0 0 24px rgba(199, 255, 79, .12), inset 0 0 20px rgba(83, 237, 255, .05);
+      }
+      .mode-option strong { display: block; color: #fff; font-size: .92rem; }
+      .mode-option small { display: block; margin-top: 7px; color: var(--muted); font-size: .68rem; line-height: 1.5; }
+      .mode-option.selected strong::before { content: "● "; color: var(--lime); }
+      .start-card .mode-help { min-height: 3.2em; margin: 0 auto 15px; color: #a9bfd8; font-size: .72rem; line-height: 1.55; }
+
       .training-overlay {
         position: absolute;
         inset: 0;
@@ -699,6 +730,8 @@
         .training-view { aspect-ratio: 16 / 8; }
         .demo-stage { min-height: 150px; }
         .demo-person { transform: scale(.8); }
+        .mode-picker { grid-template-columns: 1fr; }
+        .mode-option { min-height: 82px; }
       }
 
       .primary-button, .secondary-button {
@@ -945,7 +978,18 @@
               <div class="kicker">MEDIAPIPE MOTION GAME</div>
               <h2>跳んで、曲げて、<em>戦え。</em></h2>
               <p>ジャンプで敵を踏み潰し、横曲げで障害物を回避。ボスのエネルギー弾は体をねじって跳ね返しましょう。</p>
-              <button id="start-button" class="primary-button">カメラを起動して開始</button>
+              <div class="mode-picker" role="radiogroup" aria-label="プレイモードを選択">
+                <button type="button" class="mode-option selected" data-input-mode="mediapipe" role="radio" aria-checked="true">
+                  <strong>MediaPipeのみ</strong>
+                  <small>Webカメラだけで遊ぶ、現在の基本モード</small>
+                </button>
+                <button type="button" class="mode-option" data-input-mode="sensor" role="radio" aria-checked="false">
+                  <strong>センサーあり</strong>
+                  <small>Webカメラと身体装着IMUを併用するモード</small>
+                </button>
+              </div>
+              <p id="mode-help" class="mode-help">Webカメラの骨格推定だけで、すべての動きを判定します。</p>
+              <button id="start-button" class="primary-button">MediaPipeのみで開始</button>
               <p class="safety">安全のため、周囲と頭上に十分なスペースを確保してください。</p>
             </div>
           </div>
@@ -1023,7 +1067,7 @@
           </section>
 
           <section class="panel">
-            <h3>動作センサー</h3>
+            <h3>動作判定</h3>
             <div class="meter-row"><span>ジャンプ量</span><strong id="jump-value">0%</strong></div>
             <div class="meter-track"><div id="jump-meter" class="meter-fill"></div></div>
             <div class="bend-meter">
@@ -1036,6 +1080,8 @@
             </div>
             <div class="debug-grid">
               <div class="debug-cell"><span>骨格検出</span><strong id="pose-state">待機中</strong></div>
+              <div class="debug-cell"><span>プレイモード</span><strong id="input-mode-state">MediaPipeのみ</strong></div>
+              <div class="debug-cell"><span>IMU</span><strong id="imu-state">使用しない</strong></div>
               <div class="debug-cell"><span>基準姿勢</span><strong id="calibration-state">未設定</strong></div>
               <div class="debug-cell"><span>腰の移動</span><strong id="hip-delta">0.000</strong></div>
               <div class="debug-cell"><span>撃破数</span><strong id="defeat-count">0</strong></div>
@@ -1067,6 +1113,8 @@
       const shell = document.querySelector("#game-shell");
       const soundToggle = document.querySelector("#sound-toggle");
       const startButton = document.querySelector("#start-button");
+      const modeButtons = [...document.querySelectorAll("[data-input-mode]")];
+      const modeHelp = document.querySelector("#mode-help");
       const startOverlay = document.querySelector("#start-overlay");
       const trainingOverlay = document.querySelector("#training-overlay");
       const trainingProgress = document.querySelector("#training-progress");
@@ -1096,6 +1144,8 @@
       const statusTitle = document.querySelector("#status-title");
       const statusDetail = document.querySelector("#status-detail");
       const poseState = document.querySelector("#pose-state");
+      const inputModeState = document.querySelector("#input-mode-state");
+      const imuState = document.querySelector("#imu-state");
       const calibrationState = document.querySelector("#calibration-state");
       const hipDeltaLabel = document.querySelector("#hip-delta");
       const jumpMeter = document.querySelector("#jump-meter");
@@ -1138,6 +1188,7 @@
         return [name, audio];
       }));
       let soundEnabled = true;
+      let selectedInputMode = "mediapipe";
 
       let landmarker;
       let drawingUtils;
@@ -1217,6 +1268,26 @@
         soundToggle.setAttribute("aria-pressed", String(soundEnabled));
         if (soundEnabled) playSound("confirmSecondary", 0.55);
         else Object.values(sounds).forEach((audio) => audio.pause());
+      }
+
+      function selectInputMode(mode, announce = true) {
+        selectedInputMode = mode === "sensor" ? "sensor" : "mediapipe";
+        document.body.dataset.inputMode = selectedInputMode;
+        const sensorMode = selectedInputMode === "sensor";
+
+        modeButtons.forEach((button) => {
+          const selected = button.dataset.inputMode === selectedInputMode;
+          button.classList.toggle("selected", selected);
+          button.setAttribute("aria-checked", String(selected));
+        });
+
+        inputModeState.textContent = sensorMode ? "カメラ＋IMU" : "MediaPipeのみ";
+        imuState.textContent = sensorMode ? "接続待ち" : "使用しない";
+        modeHelp.textContent = sensorMode
+          ? "WebカメラとIMUを併用します。IMU未接続時はMediaPipe判定でゲームを続行します。"
+          : "Webカメラの骨格推定だけで、すべての動きを判定します。";
+        startButton.textContent = sensorMode ? "センサーありモードで開始" : "MediaPipeのみで開始";
+        if (announce) playSound("confirmSecondary", 0.48);
       }
 
       function setStatus(title, detail) {
@@ -1570,7 +1641,8 @@
         trainingOverlay.classList.add("hidden");
         startOverlay.classList.remove("hidden");
         startButton.disabled = false;
-        startButton.textContent = "カメラを起動して開始";
+        modeButtons.forEach((button) => { button.disabled = false; });
+        selectInputMode(selectedInputMode, false);
         connection.classList.remove("online");
         connectionLabel.textContent = "カメラ未接続";
         poseState.textContent = "待機中";
@@ -1914,6 +1986,7 @@
       async function startGame() {
         playSound("confirmPrimary", 0.55);
         startButton.disabled = true;
+        modeButtons.forEach((button) => { button.disabled = true; });
         startButton.textContent = "準備しています…";
 
         try {
@@ -1929,7 +2002,8 @@
           await video.play();
           resetGameProgress();
           connection.classList.add("online");
-          connectionLabel.textContent = "カメラ接続中";
+          connectionLabel.textContent = selectedInputMode === "sensor" ? "カメラ接続・IMU待機" : "カメラ接続中";
+          imuState.textContent = selectedInputMode === "sensor" ? "接続待ち（カメラで継続）" : "使用しない";
           startOverlay.classList.add("hidden");
           resetCalibration();
           resizeCanvas();
@@ -1938,6 +2012,7 @@
         } catch (error) {
           console.error(error);
           startButton.disabled = false;
+          modeButtons.forEach((button) => { button.disabled = false; });
           startButton.textContent = "もう一度試す";
           setStatus("カメラを開始できませんでした", "カメラの使用を許可し、インターネット接続も確認してください");
         }
@@ -1978,6 +2053,10 @@
         requestAnimationFrame(renderLoop);
       }
 
+      modeButtons.forEach((button) => {
+        button.addEventListener("click", () => selectInputMode(button.dataset.inputMode));
+      });
+      selectInputMode("mediapipe", false);
       startButton.addEventListener("click", startGame);
       soundToggle.addEventListener("click", toggleSound);
       recalibrateButton.addEventListener("click", () => {
