@@ -1144,6 +1144,8 @@
               <div class="debug-cell"><span>ジャイロ X / Y / Z</span><strong id="imu-gyro" class="imu-vector">—</strong></div>
               <div class="debug-cell"><span>IMU受信数</span><strong id="imu-packets">0</strong></div>
               <div class="debug-cell"><span>IMUねじり強度</span><strong id="imu-twist-state">—</strong></div>
+              <div class="debug-cell"><span>IMUジャンプ強度</span><strong id="imu-jump-state">—</strong></div>
+              <div class="debug-cell"><span>ジャンプ判定</span><strong id="jump-fusion-state">MediaPipeのみ</strong></div>
               <div class="debug-cell"><span>反射判定</span><strong id="fusion-state">MediaPipeのみ</strong></div>
               <div class="debug-cell"><span>基準姿勢</span><strong id="calibration-state">未設定</strong></div>
               <div class="debug-cell"><span>腰の移動</span><strong id="hip-delta">0.000</strong></div>
@@ -1219,6 +1221,8 @@
       const imuGyro = document.querySelector("#imu-gyro");
       const imuPackets = document.querySelector("#imu-packets");
       const imuTwistState = document.querySelector("#imu-twist-state");
+      const imuJumpState = document.querySelector("#imu-jump-state");
+      const jumpFusionState = document.querySelector("#jump-fusion-state");
       const fusionState = document.querySelector("#fusion-state");
       const calibrationState = document.querySelector("#calibration-state");
       const hipDeltaLabel = document.querySelector("#hip-delta");
@@ -1279,6 +1283,16 @@
       let imuTwistThreshold = 45;
       let imuTwistDetectedAt = -Infinity;
       let imuCalibrationReady = false;
+      let imuAccelMagnitude = 1;
+      let imuJumpIntensity = 0;
+      let imuIdleAccelBaseline = 1;
+      let imuIdleAccelDeviation = 0;
+      let imuIdleAccelSamples = 0;
+      let maxTrainingJumpAccel = 0;
+      let imuJumpThreshold = 0.20;
+      let imuJumpDetectedAt = -Infinity;
+      let imuJumpCalibrationReady = false;
+      let cameraJumpDetectedAt = -Infinity;
 
       let landmarker;
       let drawingUtils;
@@ -1340,6 +1354,8 @@
       const REFLECT_CHECK_DELAY_MS = 550;
       const REFLECT_TIMEOUT_MS = 2950;
       const IMU_TWIST_HOLD_MS = 700;
+      const IMU_JUMP_HOLD_MS = 700;
+      const CAMERA_JUMP_HOLD_MS = 520;
       const BATTLE_DURATION_MS = 3 * 60 * 1000;
       const RESULT_DISPLAY_MS = 10 * 1000;
 
@@ -1373,6 +1389,7 @@
         });
 
         inputModeState.textContent = sensorMode ? "カメラ＋IMU" : "MediaPipeのみ";
+        jumpFusionState.textContent = sensorMode ? "IMU接続待ち" : "MediaPipeのみ";
         fusionState.textContent = sensorMode ? "IMU接続待ち" : "MediaPipeのみ";
         if (sensorMode) connectImuBridge();
         else disconnectImuBridge();
@@ -1389,6 +1406,7 @@
         imuGyro.textContent = "—";
         imuPackets.textContent = "0";
         imuTwistState.textContent = "—";
+        imuJumpState.textContent = "—";
       }
 
       function disconnectImuBridge() {
@@ -1435,16 +1453,30 @@
         imuGyroSmoothed = imuGyroSmoothed === 0
           ? imuGyroMagnitude
           : imuGyroSmoothed * 0.68 + imuGyroMagnitude * 0.32;
+        imuAccelMagnitude = Math.hypot(ax, ay, az);
+        const accelDifference = Math.abs(imuAccelMagnitude - imuIdleAccelBaseline);
+        imuJumpIntensity = imuJumpIntensity === 0
+          ? accelDifference
+          : imuJumpIntensity * 0.52 + accelDifference * 0.48;
 
         if (gameMode === "calibration") {
           imuIdleGyroSamples += 1;
           imuIdleGyroBaseline += (imuGyroSmoothed - imuIdleGyroBaseline) / imuIdleGyroSamples;
+          imuIdleAccelSamples += 1;
+          imuIdleAccelBaseline += (imuAccelMagnitude - imuIdleAccelBaseline) / imuIdleAccelSamples;
+          imuIdleAccelDeviation += (accelDifference - imuIdleAccelDeviation) / imuIdleAccelSamples;
         }
         if (gameMode === "training" && trainingStage === 0) {
           maxTrainingGyro = Math.max(maxTrainingGyro, imuGyroSmoothed);
         }
+        if (gameMode === "training" && trainingStage === 1) {
+          maxTrainingJumpAccel = Math.max(maxTrainingJumpAccel, imuJumpIntensity);
+        }
         if (gameMode === "battle" && imuGyroSmoothed >= imuTwistThreshold) {
           imuTwistDetectedAt = now;
+        }
+        if (gameMode === "battle" && imuJumpIntensity >= imuJumpThreshold) {
+          imuJumpDetectedAt = now;
         }
 
         imuState.textContent = "受信中";
@@ -1453,6 +1485,10 @@
         imuGyro.textContent = `${gx.toFixed(1)} / ${gy.toFixed(1)} / ${gz.toFixed(1)} °/s`;
         imuPackets.textContent = imuPacketCount.toLocaleString("ja-JP");
         imuTwistState.textContent = `${imuGyroSmoothed.toFixed(0)} / 判定 ${imuTwistThreshold.toFixed(0)} °/s`;
+        imuJumpState.textContent = `${imuJumpIntensity.toFixed(2)} / 判定 ${imuJumpThreshold.toFixed(2)} g`;
+        if (gameMode !== "battle") {
+          jumpFusionState.textContent = imuJumpCalibrationReady ? "MediaPipe＋IMU" : "IMU調整前";
+        }
         if (gameMode !== "battle" || !bossAttackActive) {
           fusionState.textContent = imuCalibrationReady ? "MediaPipe＋IMU" : "IMU調整前";
         }
@@ -1473,6 +1509,7 @@
         } catch (error) {
           console.warn("IMU Bridgeへ接続できませんでした", error);
           imuState.textContent = "Bridge未接続（カメラで継続）";
+          jumpFusionState.textContent = "MediaPipe代替";
           fusionState.textContent = "MediaPipe代替";
           scheduleImuReconnect();
           return;
@@ -1492,6 +1529,8 @@
           imuSocket = null;
           imuLastReceivedAt = 0;
           imuState.textContent = "Bridge未接続（カメラで継続）";
+          jumpFusionState.textContent = "MediaPipe代替";
+          fusionState.textContent = "MediaPipe代替";
           if (video.srcObject) connectionLabel.textContent = "カメラ接続・IMU待機";
           scheduleImuReconnect();
         });
@@ -1501,6 +1540,7 @@
         if (selectedInputMode !== "sensor" || !imuLastReceivedAt) return;
         if (now - imuLastReceivedAt > IMU_STALE_MS && imuState.textContent === "受信中") {
           imuState.textContent = "IMUデータ待ち（カメラで継続）";
+          jumpFusionState.textContent = "MediaPipe代替";
           fusionState.textContent = "MediaPipe代替";
           if (video.srcObject) connectionLabel.textContent = "カメラ接続・IMU待機";
         }
@@ -1676,6 +1716,16 @@
         imuTwistThreshold = 45;
         imuTwistDetectedAt = -Infinity;
         imuCalibrationReady = false;
+        imuAccelMagnitude = 1;
+        imuJumpIntensity = 0;
+        imuIdleAccelBaseline = 1;
+        imuIdleAccelDeviation = 0;
+        imuIdleAccelSamples = 0;
+        maxTrainingJumpAccel = 0;
+        imuJumpThreshold = 0.20;
+        imuJumpDetectedAt = -Infinity;
+        imuJumpCalibrationReady = false;
+        cameraJumpDetectedAt = -Infinity;
         maxTrainingHipRise = 0;
         maxDiagonalBend = 0;
         jumpHipThreshold = JUMP_HIP_THRESHOLD;
@@ -1686,6 +1736,7 @@
         bendMeter.style.width = "0%";
         bendValue.textContent = "中央 0%";
         bendDirectionLabel.textContent = "中央";
+        jumpFusionState.textContent = selectedInputMode === "sensor" ? "IMU調整中" : "MediaPipeのみ";
         calibrationState.textContent = "測定中";
         trainingOverlay.classList.remove("hidden");
         trainingVisuals.hidden = false;
@@ -1717,6 +1768,11 @@
       function setTrainingStage(stage) {
         trainingStage = stage;
         trainingLocked = false;
+        if (stage === 1) {
+          imuJumpIntensity = 0;
+          imuJumpDetectedAt = -Infinity;
+          cameraJumpDetectedAt = -Infinity;
+        }
         trainingFill.style.width = "0%";
         trainingDots.forEach((dot, index) => {
           dot.className = `training-dot${index < stage ? " done" : index === stage ? " active" : ""}`;
@@ -1724,7 +1780,7 @@
 
         const stages = [
           ["1/3", "体をねじる運動", "脚を動かさず、腕を振りながら上体を左右へ2回ねじります。センサーありモードではIMUの回転速度も測ります。", "左右へ大きく、中央まで戻る"],
-          ["2/3", "両脚で跳ぶ運動", "両脚をそろえ、無理のない高さで軽く2回跳びます。", "軽く2回ジャンプ"],
+          ["2/3", "両脚で跳ぶ運動", "両脚をそろえ、無理のない高さで軽く2回跳びます。センサーありモードではIMUの加速度変化も測ります。", "軽く2回ジャンプ"],
           ["3/3", "斜め下に曲げ、胸を反らす運動", "両手を片方の足先へ近づけたあと、上体を起こして胸を開きます。", "斜め下 → 胸を開く"],
         ];
         const [progress, title, description, cue] = stages[stage];
@@ -1820,9 +1876,14 @@
           imuTwistThreshold = Math.max(30, Math.min(160, Math.max(maxTrainingGyro * 0.48, imuIdleGyroBaseline * 2.2 + 10)));
           imuCalibrationReady = true;
         }
+        if (selectedInputMode === "sensor" && maxTrainingJumpAccel >= 0.10) {
+          imuJumpThreshold = Math.max(0.12, Math.min(1.20,
+            Math.max(maxTrainingJumpAccel * 0.42, imuIdleAccelDeviation * 4 + 0.06)));
+          imuJumpCalibrationReady = true;
+        }
         trainingProgress.textContent = "HERO SCAN COMPLETE";
         trainingTitle.textContent = "あなた専用の判定に調整しました";
-        trainingDescription.textContent = "身体の相対サイズと動ける範囲を、ジャンプとねじりの判定に反映します。";
+        trainingDescription.textContent = "身体の相対サイズと動ける範囲、IMUの加速度と回転速度を個人別判定に反映します。";
         trainingCue.textContent = "準備完了！";
         demoPerson.className = "demo-person demo-complete";
         trainingFill.style.width = "100%";
@@ -1835,7 +1896,9 @@
         document.querySelector("#scan-imu-twist").textContent = maxTrainingGyro >= 20
           ? `${Math.round(maxTrainingGyro)}°/s → 判定${Math.round(imuTwistThreshold)}°/s`
           : "未取得（カメラで判定）";
-        document.querySelector("#scan-jump").textContent = `${Math.round(maxTrainingHipRise * 100)}%`;
+        document.querySelector("#scan-jump").textContent = selectedInputMode === "sensor" && maxTrainingJumpAccel >= 0.10
+          ? `カメラ ${Math.round(maxTrainingHipRise * 100)}% / IMU ${maxTrainingJumpAccel.toFixed(2)}g→${imuJumpThreshold.toFixed(2)}g`
+          : `${Math.round(maxTrainingHipRise * 100)}%（カメラ）`;
         document.querySelector("#scan-bend").textContent = `${Math.round(maxDiagonalBend * 100)}%`;
         calibrationState.textContent = "個人調整済み";
         setStatus("ヒーロースキャン完了", "画面の「バトル開始」を押してください");
@@ -1846,6 +1909,9 @@
         gameMode = "battle";
         trainingOverlay.classList.add("hidden");
         const now = performance.now();
+        imuJumpIntensity = 0;
+        imuJumpDetectedAt = -Infinity;
+        cameraJumpDetectedAt = -Infinity;
         battleEndsAt = now + BATTLE_DURATION_MS;
         battleTimer.textContent = "03:00";
         timerCard.classList.remove("warning");
@@ -1990,7 +2056,10 @@
         const ankleRise = baselineAnkleY - ankleY;
         const jumpRatio = Math.max(0, Math.min(hipRise / jumpHipThreshold, 1.25));
         jumpMeter.style.width = `${Math.min(jumpRatio * 100, 100)}%`;
-        jumpValue.textContent = `${Math.round(jumpRatio * 100)}%`;
+        const imuJumpFresh = selectedInputMode === "sensor" && imuJumpCalibrationReady && now - imuLastReceivedAt <= IMU_STALE_MS;
+        jumpValue.textContent = imuJumpFresh
+          ? `カメラ ${Math.round(jumpRatio * 100)}% / IMU ${imuJumpIntensity.toFixed(2)}g`
+          : `${Math.round(jumpRatio * 100)}%`;
         hipDeltaLabel.textContent = hipRise.toFixed(3);
 
         if (gameMode === "training") {
@@ -2020,13 +2089,29 @@
 
         const cooldownComplete = now - lastJumpAt > COOLDOWN_MS;
         const rising = hipVelocity < -0.00012;
+        const cameraJumpDetected = rising && hipRise > jumpHipThreshold && ankleRise > jumpAnkleThreshold;
+        if (!airborne && cooldownComplete && enemyReady && cameraJumpDetected) {
+          cameraJumpDetectedAt = now;
+        }
+        const cameraJumpRecent = now - cameraJumpDetectedAt <= CAMERA_JUMP_HOLD_MS;
+        const imuJumpRecent = imuJumpFresh && now - imuJumpDetectedAt <= IMU_JUMP_HOLD_MS;
+        const fusedJumpDetected = cameraJumpRecent && (!imuJumpFresh || imuJumpRecent);
 
-        if (!airborne && cooldownComplete && enemyReady && rising &&
-            hipRise > jumpHipThreshold && ankleRise > jumpAnkleThreshold) {
+        jumpFusionState.textContent = imuJumpFresh
+          ? cameraJumpRecent
+            ? imuJumpRecent ? "カメラ＋IMU：ジャンプOK" : "カメラOK・IMU待ち"
+            : imuJumpRecent ? "IMU OK・姿勢待ち" : "カメラ＋IMU待ち"
+          : selectedInputMode === "sensor" ? "MediaPipe代替" : "MediaPipeのみ";
+
+        if (!airborne && cooldownComplete && enemyReady && fusedJumpDetected) {
           airborne = true;
           attackArmed = true;
           lastJumpAt = now;
-          setStatus("ジャンプストライク準備！", "敵の上へ着地して踏み潰してください");
+          cameraJumpDetectedAt = -Infinity;
+          imuJumpDetectedAt = -Infinity;
+          setStatus("ジャンプストライク準備！", imuJumpFresh
+            ? "骨格の浮き上がりとIMUの加速度変化を確認しました"
+            : "敵の上へ着地して踏み潰してください");
           playSound("jump", 0.7);
         }
 
