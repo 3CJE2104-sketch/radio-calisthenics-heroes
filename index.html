@@ -180,7 +180,7 @@
 
       .hud-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
 
-      .mission, .score-card {
+      .mission, .score-card, .timer-card {
         border: 1px solid rgba(135, 185, 255, 0.24);
         background: rgba(4, 12, 25, 0.72);
         backdrop-filter: blur(12px);
@@ -199,8 +199,13 @@
       }
 
       .mission strong { font-size: clamp(0.92rem, 2vw, 1.15rem); }
+      .hud-stats { display: flex; gap: 9px; }
       .score-card { text-align: right; min-width: 126px; }
       .score-card b { font-size: 1.7rem; line-height: 1; color: var(--lime); }
+      .timer-card { text-align: center; min-width: 105px; }
+      .timer-card b { font-size: 1.45rem; line-height: 1; color: var(--cyan); font-variant-numeric: tabular-nums; }
+      .timer-card.warning { border-color: rgba(255,100,138,.7); animation: warning-pulse .55s ease-in-out infinite alternate; }
+      .timer-card.warning b { color: #ff8cab; }
 
       .enemy-zone {
         position: absolute;
@@ -518,6 +523,40 @@
 
       .training-overlay.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
 
+      .result-overlay {
+        position: absolute;
+        inset: 0;
+        z-index: 12;
+        display: grid;
+        place-items: center;
+        padding: 22px;
+        background:
+          radial-gradient(circle at 50% 38%, rgba(199,255,79,.14), transparent 35%),
+          rgba(3, 9, 19, .93);
+        transition: opacity .3s ease, visibility .3s ease;
+      }
+
+      .result-overlay.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+
+      .result-card {
+        width: min(570px, 100%);
+        padding: clamp(26px, 5vw, 44px);
+        border: 1px solid rgba(199,255,79,.38);
+        border-radius: 26px;
+        background: linear-gradient(145deg, rgba(10,30,53,.97), rgba(7,13,28,.98));
+        box-shadow: 0 30px 90px rgba(0,0,0,.5), inset 0 0 55px rgba(199,255,79,.05);
+        text-align: center;
+      }
+
+      .result-card h2 { margin: 8px 0 6px; font-size: clamp(2rem, 6vw, 3.2rem); }
+      .result-score { margin: 14px 0 20px; color: var(--lime); font-size: clamp(2.7rem, 9vw, 4.8rem); font-weight: 950; line-height: 1; }
+      .result-score small { display: block; margin-bottom: 6px; color: var(--muted); font-size: .7rem; letter-spacing: .18em; }
+      .result-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 22px; }
+      .result-item { padding: 13px 8px; border: 1px solid rgba(125,190,255,.2); border-radius: 14px; background: rgba(255,255,255,.04); }
+      .result-item span { display: block; color: var(--muted); font-size: .72rem; }
+      .result-item strong { display: block; margin-top: 3px; color: var(--cyan); font-size: 1.45rem; }
+      .result-return { margin: 14px 0 0; color: var(--muted); font-size: .78rem; }
+
       .training-card {
         width: min(920px, 100%);
         padding: clamp(18px, 3vw, 28px);
@@ -797,6 +836,9 @@
         .hud { padding: 12px; }
         .mission { max-width: 62%; }
         .score-card { min-width: 100px; }
+        .hud-stats { flex-direction: column; gap: 6px; }
+        .timer-card, .score-card { min-width: 92px; padding: 8px 10px; }
+        .timer-card b, .score-card b { font-size: 1.2rem; }
         .enemy-zone { left: 50%; right: auto; transform: translateX(-50%) scale(.82); transform-origin: center bottom; }
         .obstacle-zone { top: 37%; width: 48%; transform-origin: center; }
         .sidebar { grid-template-columns: 1fr; }
@@ -854,9 +896,15 @@
                 <span class="eyebrow">MISSION</span>
                 <strong id="mission-text">ジャンプ・横曲げ・ねじりで戦え！</strong>
               </div>
-              <div class="score-card">
-                <span class="eyebrow">SCORE</span>
-                <b id="score">0000</b>
+              <div class="hud-stats">
+                <div id="timer-card" class="timer-card">
+                  <span class="eyebrow">TIME</span>
+                  <b id="battle-timer">05:00</b>
+                </div>
+                <div class="score-card">
+                  <span class="eyebrow">SCORE</span>
+                  <b id="score">0000</b>
+                </div>
               </div>
             </div>
             <div class="status-panel" aria-live="polite">
@@ -918,6 +966,21 @@
                 <button id="retry-scan-button" class="secondary-button">もう一度測る</button>
               </div>
               <p class="training-note">痛みを感じる動きは中止してください。表示値はカメラ上の相対値で、医療用の測定ではありません。</p>
+            </div>
+          </div>
+
+          <div id="result-overlay" class="result-overlay hidden" aria-live="assertive">
+            <div class="result-card">
+              <div class="training-progress">BATTLE RESULT</div>
+              <h2>5分間、おつかれさま！</h2>
+              <div class="result-score"><small>TOTAL SCORE</small><span id="result-score">0000</span></div>
+              <div class="result-grid">
+                <div class="result-item"><span>撃破</span><strong id="result-defeats">0</strong></div>
+                <div class="result-item"><span>回避</span><strong id="result-avoids">0</strong></div>
+                <div class="result-item"><span>反射</span><strong id="result-reflects">0</strong></div>
+              </div>
+              <button id="return-top-button" class="primary-button">トップへ戻る</button>
+              <p class="result-return"><strong id="return-countdown">10</strong>秒後に自動でトップ画面へ戻ります</p>
             </div>
           </div>
         </div>
@@ -994,6 +1057,13 @@
       const trainingActions = document.querySelector("#training-actions");
       const battleButton = document.querySelector("#battle-button");
       const retryScanButton = document.querySelector("#retry-scan-button");
+      const resultOverlay = document.querySelector("#result-overlay");
+      const resultScore = document.querySelector("#result-score");
+      const resultDefeats = document.querySelector("#result-defeats");
+      const resultAvoids = document.querySelector("#result-avoids");
+      const resultReflects = document.querySelector("#result-reflects");
+      const returnTopButton = document.querySelector("#return-top-button");
+      const returnCountdown = document.querySelector("#return-countdown");
       const recalibrateButton = document.querySelector("#recalibrate-button");
       const connection = document.querySelector("#connection");
       const connectionLabel = document.querySelector("#connection-label");
@@ -1012,6 +1082,8 @@
       const enemyZone = document.querySelector("#enemy-zone");
       const enemyNumber = document.querySelector("#enemy-number");
       const scoreLabel = document.querySelector("#score");
+      const battleTimer = document.querySelector("#battle-timer");
+      const timerCard = document.querySelector("#timer-card");
       const defeatCountLabel = document.querySelector("#defeat-count");
       const avoidCountLabel = document.querySelector("#avoid-count");
       const reflectCountLabel = document.querySelector("#reflect-count");
@@ -1048,6 +1120,10 @@
       let nextBossAttackAt = Infinity;
       let reflectedAttacks = 0;
       let twistReflectThreshold = 0.13;
+      let battleEndsAt = Infinity;
+      let resultReturnAt = Infinity;
+      let returnTopTimer = null;
+      let renderLoopActive = false;
       let gameMode = "calibration";
       let trainingStage = 0;
       let trainingLocked = false;
@@ -1076,6 +1152,8 @@
       const OBSTACLE_TIMEOUT_MS = 2850;
       const REFLECT_CHECK_DELAY_MS = 550;
       const REFLECT_TIMEOUT_MS = 2950;
+      const BATTLE_DURATION_MS = 5 * 60 * 1000;
+      const RESULT_DISPLAY_MS = 10 * 1000;
 
       function setStatus(title, detail) {
         statusTitle.textContent = title;
@@ -1109,6 +1187,30 @@
 
       function relativeLabel(value) {
         return `画面比 ${Math.round(value * 100)}%`;
+      }
+
+      function formatTime(milliseconds) {
+        const totalSeconds = Math.max(0, Math.ceil(milliseconds / 1000));
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+      }
+
+      function resetGameProgress() {
+        score = 0;
+        defeats = 0;
+        avoided = 0;
+        reflectedAttacks = 0;
+        enemyReady = true;
+        scoreLabel.textContent = "0000";
+        defeatCountLabel.textContent = "0";
+        avoidCountLabel.textContent = "0";
+        reflectCountLabel.textContent = "0";
+        enemyNumber.textContent = "01";
+        enemyZone.className = "enemy-zone";
+        battleTimer.textContent = "05:00";
+        timerCard.classList.remove("warning");
+        resultOverlay.classList.add("hidden");
       }
 
       function drawTrainingPreview(lm = null) {
@@ -1327,10 +1429,86 @@
         gameMode = "battle";
         trainingOverlay.classList.add("hidden");
         const now = performance.now();
+        battleEndsAt = now + BATTLE_DURATION_MS;
+        battleTimer.textContent = "05:00";
+        timerCard.classList.remove("warning");
         nextObstacleAt = now + 5200;
         nextBossAttackAt = now + 8200;
         missionText.textContent = "ジャンプ・横曲げ・ねじりで戦え！";
         setStatus("バトル開始 — ジャンプ！", "横曲げで回避し、ボスの弾は体をねじって反射してください");
+      }
+
+      function updateBattleClock(now) {
+        if (gameMode === "battle") {
+          const remaining = battleEndsAt - now;
+          battleTimer.textContent = formatTime(remaining);
+          timerCard.classList.toggle("warning", remaining <= 30000);
+          if (remaining <= 0) finishBattle(now);
+          return;
+        }
+
+        if (gameMode === "result") {
+          returnCountdown.textContent = String(Math.max(0, Math.ceil((resultReturnAt - now) / 1000)));
+        }
+      }
+
+      function finishBattle(now = performance.now()) {
+        if (gameMode !== "battle") return;
+        gameMode = "result";
+        battleTimer.textContent = "00:00";
+        timerCard.classList.remove("warning");
+        obstacleActive = false;
+        bossAttackActive = false;
+        obstacleZone.className = "obstacle-zone";
+        obstacleZone.setAttribute("aria-hidden", "true");
+        reflectZone.className = "reflect-zone";
+        reflectZone.setAttribute("aria-hidden", "true");
+        missionText.textContent = "BATTLE FINISHED";
+        setStatus("タイムアップ！", "5分間のバトル結果を集計しました");
+        resultScore.textContent = String(score).padStart(4, "0");
+        resultDefeats.textContent = String(defeats);
+        resultAvoids.textContent = String(avoided);
+        resultReflects.textContent = String(reflectedAttacks);
+        resultReturnAt = now + RESULT_DISPLAY_MS;
+        returnCountdown.textContent = "10";
+        resultOverlay.classList.remove("hidden");
+        window.clearTimeout(returnTopTimer);
+        returnTopTimer = window.setTimeout(returnToTop, RESULT_DISPLAY_MS);
+      }
+
+      function returnToTop() {
+        window.clearTimeout(returnTopTimer);
+        returnTopTimer = null;
+        renderLoopActive = false;
+        gameMode = "top";
+        battleEndsAt = Infinity;
+        resultReturnAt = Infinity;
+
+        if (video.srcObject) {
+          video.srcObject.getTracks().forEach((track) => track.stop());
+          video.srcObject = null;
+        }
+        if (landmarker && typeof landmarker.close === "function") {
+          try { landmarker.close(); } catch (error) { console.warn(error); }
+        }
+        landmarker = null;
+        drawingUtils = null;
+        trainingDrawingUtils = null;
+        lastVideoTime = -1;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        trainingPreviewCtx.clearRect(0, 0, trainingPreviewCanvas.width, trainingPreviewCanvas.height);
+        resultOverlay.classList.add("hidden");
+        trainingOverlay.classList.add("hidden");
+        startOverlay.classList.remove("hidden");
+        startButton.disabled = false;
+        startButton.textContent = "カメラを起動して開始";
+        connection.classList.remove("online");
+        connectionLabel.textContent = "カメラ未接続";
+        poseState.textContent = "待機中";
+        calibrationState.textContent = "未設定";
+        missionText.textContent = "ジャンプ・横曲げ・ねじりで戦え！";
+        setStatus("カメラを起動してください", "全身が映る位置に立つと、自動で準備します");
+        resetGameProgress();
       }
 
       function updateJumpDetector(lm) {
@@ -1670,11 +1848,13 @@
 
           video.srcObject = stream;
           await video.play();
+          resetGameProgress();
           connection.classList.add("online");
           connectionLabel.textContent = "カメラ接続中";
           startOverlay.classList.add("hidden");
           resetCalibration();
           resizeCanvas();
+          renderLoopActive = true;
           requestAnimationFrame(renderLoop);
         } catch (error) {
           console.error(error);
@@ -1685,12 +1865,15 @@
       }
 
       function renderLoop() {
+        if (!renderLoopActive) return;
+        const now = performance.now();
+        updateBattleClock(now);
         resizeCanvas();
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         if (video.readyState >= 2 && video.currentTime !== lastVideoTime) {
           lastVideoTime = video.currentTime;
-          const result = landmarker.detectForVideo(video, performance.now());
+          const result = landmarker.detectForVideo(video, now);
 
           if (result.landmarks.length) {
             const lm = result.landmarks[0];
@@ -1720,6 +1903,7 @@
       recalibrateButton.addEventListener("click", resetCalibration);
       battleButton.addEventListener("click", beginBattle);
       retryScanButton.addEventListener("click", resetCalibration);
+      returnTopButton.addEventListener("click", returnToTop);
       window.addEventListener("resize", resizeCanvas);
     </script>
   </body>
