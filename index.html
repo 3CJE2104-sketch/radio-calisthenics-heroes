@@ -516,6 +516,48 @@
         z-index: 2;
       }
 
+      .consent-overlay {
+        position: absolute;
+        inset: 0;
+        z-index: 20;
+        display: grid;
+        place-items: center;
+        padding: 22px;
+        overflow-y: auto;
+        background:
+          radial-gradient(circle at 50% 35%, rgba(83, 237, 255, .14), transparent 38%),
+          rgba(3, 9, 19, .96);
+      }
+      .consent-overlay[hidden] { display: none; }
+      .consent-card {
+        width: min(650px, 100%);
+        padding: clamp(24px, 5vw, 42px);
+        text-align: center;
+        border: 1px solid rgba(83, 237, 255, .38);
+        border-radius: 26px;
+        background: linear-gradient(145deg, rgba(10, 30, 53, .98), rgba(7, 13, 28, .99));
+        box-shadow: 0 30px 90px rgba(0, 0, 0, .55);
+      }
+      .consent-card h2 { margin: 9px 0 13px; font-size: clamp(1.45rem, 4.5vw, 2.3rem); line-height: 1.35; }
+      .consent-lead { margin: 0 auto 15px; color: #c6d7e9; line-height: 1.7; }
+      .consent-details {
+        margin: 0 auto 15px;
+        padding: 14px 16px;
+        text-align: left;
+        color: #aebfd2;
+        border: 1px solid rgba(125, 190, 255, .2);
+        border-radius: 15px;
+        background: rgba(255,255,255,.035);
+        font-size: .78rem;
+        line-height: 1.7;
+      }
+      .consent-details strong { color: var(--cyan); }
+      .consent-minor { margin: 0 0 17px; color: #ffd889; font-size: .76rem; line-height: 1.6; }
+      .consent-actions { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+      .consent-actions .secondary-button { width: auto; min-width: 180px; margin-top: 0; padding: 14px 22px; }
+      .research-download[hidden], .research-save-note[hidden] { display: none; }
+      .research-save-note { margin: 8px 0 0; color: var(--cyan); font-size: .72rem; }
+
       .start-overlay {
         position: absolute;
         inset: 0;
@@ -1070,6 +1112,24 @@
 
           <div id="impact-text" class="impact-text" aria-hidden="true">STOMP!</div>
 
+          <div id="consent-overlay" class="consent-overlay" aria-live="polite">
+            <div class="consent-card">
+              <div class="kicker">研究データ利用の確認</div>
+              <h2>あなたのゲームをプレイした結果を<br>研究に使用してもよろしいでしょうか？</h2>
+              <p class="consent-lead">「いいえ」を選んでも、ゲームの内容や遊び方は変わりません。</p>
+              <div class="consent-details">
+                <strong>「はい」で保存するもの</strong><br>
+                MediaPipeが推定した骨格座標、M5StickC PLUS2の加速度・ジャイロ値、動作判定、得点、各フェーズの時刻です。<br>
+                カメラ映像・音声・氏名・IMU端末のIPアドレスは保存しません。データは匿名のJSONファイルとして、このPCにのみ保存します。
+              </div>
+              <p class="consent-minor">18歳未満の方は、保護者または担当者と一緒に選んでください。</p>
+              <div class="consent-actions">
+                <button id="consent-yes-button" class="primary-button" type="button">はい（記録する）</button>
+                <button id="consent-no-button" class="secondary-button" type="button">いいえ（記録しない）</button>
+              </div>
+            </div>
+          </div>
+
           <div id="start-overlay" class="start-overlay">
             <div class="start-card">
               <div class="kicker">MEDIAPIPE MOTION GAME</div>
@@ -1168,6 +1228,8 @@
                 <div class="result-item"><span>回避</span><strong id="result-avoids">0</strong></div>
                 <div class="result-item"><span>反射</span><strong id="result-reflects">0</strong></div>
               </div>
+              <button id="research-download-button" class="secondary-button research-download" type="button" hidden>研究データをもう一度保存</button>
+              <p id="research-save-note" class="research-save-note" hidden>同意した研究データを、このPCにJSON形式で保存しました。</p>
               <button id="return-top-button" class="primary-button">トップへ戻る</button>
               <p class="result-return"><strong id="return-countdown">10</strong>秒後に自動でトップ画面へ戻ります</p>
             </div>
@@ -1251,6 +1313,9 @@
       const cameraRefresh = document.querySelector("#camera-refresh");
       const cameraHelp = document.querySelector("#camera-help");
       const startOverlay = document.querySelector("#start-overlay");
+      const consentOverlay = document.querySelector("#consent-overlay");
+      const consentYesButton = document.querySelector("#consent-yes-button");
+      const consentNoButton = document.querySelector("#consent-no-button");
       const trainingOverlay = document.querySelector("#training-overlay");
       const trainingProgress = document.querySelector("#training-progress");
       const trainingTitle = document.querySelector("#training-title");
@@ -1282,6 +1347,8 @@
       const resultReflects = document.querySelector("#result-reflects");
       const returnTopButton = document.querySelector("#return-top-button");
       const returnCountdown = document.querySelector("#return-countdown");
+      const researchDownloadButton = document.querySelector("#research-download-button");
+      const researchSaveNote = document.querySelector("#research-save-note");
       const recalibrateButton = document.querySelector("#recalibrate-button");
       const connection = document.querySelector("#connection");
       const connectionLabel = document.querySelector("#connection-label");
@@ -1344,10 +1411,16 @@
         return [name, audio];
       }));
       let soundEnabled = true;
+      let researchConsent = null;
+      let researchSession = null;
+      let researchDownloaded = false;
+      let lastResearchPoseAt = -Infinity;
+      let lastResearchImuAt = -Infinity;
       let selectedInputMode = "mediapipe";
       const IMU_WEBSOCKET_URL = "ws://127.0.0.1:8080";
       const IMU_STALE_MS = 1500;
       const IMU_RECONNECT_MS = 1800;
+      const RESEARCH_SAMPLE_INTERVAL_MS = 100;
       let imuSocket = null;
       let imuReconnectTimer = null;
       let imuLastReceivedAt = 0;
@@ -1470,6 +1543,116 @@
         else Object.values(sounds).forEach((audio) => audio.pause());
       }
 
+      function rounded(value, digits = 5) {
+        return Number(Number(value).toFixed(digits));
+      }
+
+      function setResearchConsent(consented) {
+        researchConsent = consented;
+        researchDownloaded = false;
+        lastResearchPoseAt = -Infinity;
+        lastResearchImuAt = -Infinity;
+        researchSession = consented ? {
+          schemaVersion: 1,
+          sessionId: typeof crypto.randomUUID === "function"
+            ? crypto.randomUUID()
+            : `session-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+          consentRecordedAt: new Date().toISOString(),
+          notice: "骨格座標・IMU値・動作判定・結果の研究利用に同意。映像・音声・氏名・端末IPは未収集。",
+          samplingIntervalMs: RESEARCH_SAMPLE_INTERVAL_MS,
+          poseSamples: [],
+          imuSamples: [],
+          events: [],
+        } : null;
+        consentOverlay.hidden = true;
+        researchDownloadButton.hidden = true;
+        researchSaveNote.hidden = true;
+        if (consented) recordResearchEvent("consent_yes");
+        setStatus(
+          consented ? "研究データを記録します" : "研究データは記録しません",
+          consented ? "映像や音声は保存せず、終了時に匿名JSONをこのPCへ保存します" : "ゲームは同じ内容で遊べます"
+        );
+        playSound("confirmSecondary", 0.48);
+      }
+
+      function researchElapsed(now = performance.now()) {
+        if (!researchSession) return 0;
+        if (researchSession.startedAtPerformance == null) researchSession.startedAtPerformance = now;
+        return Math.max(0, Math.round(now - researchSession.startedAtPerformance));
+      }
+
+      function recordResearchEvent(type, detail = {}) {
+        if (!researchConsent || !researchSession) return;
+        researchSession.events.push({
+          tMs: researchElapsed(),
+          phase: gameMode,
+          type,
+          ...detail,
+        });
+      }
+
+      function recordResearchPose(lm, now) {
+        if (!researchConsent || !researchSession || now - lastResearchPoseAt < RESEARCH_SAMPLE_INTERVAL_MS) return;
+        lastResearchPoseAt = now;
+        researchSession.poseSamples.push({
+          tMs: researchElapsed(now),
+          phase: gameMode,
+          landmarks: lm.map((point) => [
+            rounded(point.x),
+            rounded(point.y),
+            rounded(point.z),
+            rounded(point.visibility ?? 0, 4),
+          ]),
+        });
+      }
+
+      function recordResearchImu(ax, ay, az, gx, gy, gz, now) {
+        if (!researchConsent || !researchSession || now - lastResearchImuAt < RESEARCH_SAMPLE_INTERVAL_MS) return;
+        lastResearchImuAt = now;
+        researchSession.imuSamples.push({
+          tMs: researchElapsed(now),
+          phase: gameMode,
+          accel: [rounded(ax, 4), rounded(ay, 4), rounded(az, 4)],
+          gyro: [rounded(gx, 3), rounded(gy, 3), rounded(gz, 3)],
+        });
+      }
+
+      function downloadResearchData() {
+        if (!researchConsent || !researchSession) return;
+        const finishedAt = new Date().toISOString();
+        const payload = {
+          ...researchSession,
+          startedAtPerformance: undefined,
+          finishedAt,
+          inputMode: selectedInputMode,
+          calibration: {
+            shoulderWidth: rounded(baselineShoulderWidth ?? 0),
+            torsoLength: rounded(baselineTorsoLength ?? 0),
+            legLength: rounded(baselineLegLength ?? 0),
+            jumpHipThreshold: rounded(jumpHipThreshold),
+            jumpAnkleThreshold: rounded(jumpAnkleThreshold),
+            twistThreshold: rounded(twistReflectThreshold),
+            imuJumpThreshold: rounded(imuJumpThreshold, 4),
+            imuBendThreshold: rounded(imuBendThreshold, 3),
+            imuTwistThreshold: rounded(imuTwistThreshold, 3),
+          },
+          result: { score, defeats, avoided, reflectedAttacks },
+        };
+        const blob = new Blob([JSON.stringify(payload)], { type: "application/json;charset=utf-8" });
+        const link = document.createElement("a");
+        const stamp = finishedAt.replace(/[:.]/g, "-");
+        const url = URL.createObjectURL(blob);
+        link.href = url;
+        link.download = `radio-heroes-research-${stamp}.json`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+        researchDownloaded = true;
+        researchDownloadButton.hidden = false;
+        researchSaveNote.hidden = false;
+      }
+
       function selectInputMode(mode, announce = true) {
         selectedInputMode = mode === "sensor" ? "sensor" : "mediapipe";
         document.body.dataset.inputMode = selectedInputMode;
@@ -1542,6 +1725,7 @@
 
         const [ax, ay, az, gx, gy, gz] = values;
         const now = performance.now();
+        recordResearchImu(ax, ay, az, gx, gy, gz, now);
         imuLastReceivedAt = now;
         imuPacketCount += 1;
         imuGyroMagnitude = Math.hypot(gx, gy, gz);
@@ -1768,6 +1952,8 @@
         timerCard.classList.remove("warning");
         finishBattleButton.hidden = true;
         resultOverlay.classList.add("hidden");
+        researchDownloadButton.hidden = true;
+        researchSaveNote.hidden = true;
       }
 
       function drawTrainingPreview(lm = null) {
@@ -2055,6 +2241,7 @@
 
       function beginTutorial() {
         gameMode = "tutorial";
+        recordResearchEvent("tutorial_start");
         trainingOverlay.classList.add("hidden");
         tutorialPanel.hidden = false;
         tutorialStartButton.hidden = true;
@@ -2147,6 +2334,7 @@
       function completeTutorialStage() {
         if (tutorialLocked) return;
         tutorialLocked = true;
+        recordResearchEvent("tutorial_stage_success", { stage: tutorialStage + 1, action: ["jump", "side_bend", "twist"][tutorialStage] });
         tutorialDots[tutorialStage].className = "done";
         tutorialTitle.textContent = "できた！ 大成功！";
         tutorialCue.textContent = ["ジャンプでモンスターを倒せました！", "障害物を上手によけられました！", "ボスの弾を跳ね返せました！"][tutorialStage];
@@ -2175,6 +2363,7 @@
 
       function finishTutorial() {
         gameMode = "tutorial-complete";
+        recordResearchEvent("tutorial_complete");
         clearTutorialObjects();
         tutorialDots.forEach((dot) => { dot.className = "done"; });
         tutorialBadge.textContent = "チュートリアル クリア！";
@@ -2239,6 +2428,7 @@
 
       function beginBattle() {
         gameMode = "battle";
+        recordResearchEvent("battle_start", { durationMs: BATTLE_DURATION_MS });
         trainingOverlay.classList.add("hidden");
         tutorialPanel.hidden = true;
         clearTutorialObjects();
@@ -2274,6 +2464,7 @@
 
       function finishBattle(now = performance.now(), reason = "time") {
         if (gameMode !== "battle") return;
+        recordResearchEvent("battle_finish", { reason, score, defeats, avoided, reflectedAttacks });
         gameMode = "result";
         finishBattleButton.hidden = true;
         battleTimer.textContent = "00:00";
@@ -2298,6 +2489,9 @@
         returnCountdown.textContent = "10";
         resultOverlay.classList.remove("hidden");
         playSound("dataDisplay", 0.72);
+        if (researchConsent && !researchDownloaded) {
+          window.setTimeout(downloadResearchData, 250);
+        }
         window.clearTimeout(returnTopTimer);
         returnTopTimer = window.setTimeout(returnToTop, RESULT_DISPLAY_MS);
       }
@@ -2307,6 +2501,11 @@
         returnTopTimer = null;
         renderLoopActive = false;
         gameMode = "top";
+        researchConsent = null;
+        researchSession = null;
+        researchDownloaded = false;
+        lastResearchPoseAt = -Infinity;
+        lastResearchImuAt = -Infinity;
         battleEndsAt = Infinity;
         resultReturnAt = Infinity;
 
@@ -2328,6 +2527,7 @@
         tutorialPanel.hidden = true;
         tutorialStartButton.hidden = true;
         startOverlay.classList.remove("hidden");
+        consentOverlay.hidden = false;
         startButton.disabled = false;
         modeButtons.forEach((button) => { button.disabled = false; });
         selectInputMode(selectedInputMode, false);
@@ -2574,6 +2774,7 @@
       function finishBossAttack(success) {
         if (bossAttackResolved) return;
         bossAttackResolved = true;
+        recordResearchEvent("boss_attack_resolved", { success });
 
         if (success) {
           score += 150;
@@ -2631,6 +2832,7 @@
       function finishObstacle(success) {
         if (obstacleResolved) return;
         obstacleResolved = true;
+        recordResearchEvent("obstacle_resolved", { success, incomingSide: obstacleSide });
 
         if (success) {
           score += 50;
@@ -2664,6 +2866,7 @@
 
       function triggerAttack() {
         enemyReady = false;
+        recordResearchEvent("jump_attack_success");
         score += 100;
         defeats += 1;
         scoreLabel.textContent = String(score).padStart(4, "0");
@@ -2785,6 +2988,7 @@
 
           if (result.landmarks.length) {
             const lm = result.landmarks[0];
+            recordResearchPose(lm, now);
             drawingUtils.drawConnectors(lm, PoseLandmarker.POSE_CONNECTIONS, {
               color: "rgba(83, 237, 255, 0.78)",
               lineWidth: 3,
@@ -2810,6 +3014,8 @@
       modeButtons.forEach((button) => {
         button.addEventListener("click", () => selectInputMode(button.dataset.inputMode));
       });
+      consentYesButton.addEventListener("click", () => setResearchConsent(true));
+      consentNoButton.addEventListener("click", () => setResearchConsent(false));
       selectInputMode("mediapipe", false);
       refreshCameraList(false);
       cameraRefresh.addEventListener("click", () => refreshCameraList(true));
@@ -2827,6 +3033,7 @@
       });
       battleButton.addEventListener("click", beginTutorial);
       tutorialStartButton.addEventListener("click", beginBattle);
+      researchDownloadButton.addEventListener("click", downloadResearchData);
       finishBattleButton.addEventListener("click", () => {
         playSound("confirmSecondary", 0.52);
         finishBattle(performance.now(), "manual");
