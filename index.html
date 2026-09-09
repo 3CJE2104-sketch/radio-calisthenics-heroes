@@ -616,6 +616,44 @@
 
       .training-overlay.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
 
+      .tutorial-panel {
+        position: absolute;
+        z-index: 9;
+        top: 112px;
+        left: 50%;
+        width: min(600px, calc(100% - 28px));
+        transform: translateX(-50%);
+        padding: 16px 20px;
+        text-align: center;
+        border: 2px solid rgba(199, 255, 79, .58);
+        border-radius: 20px;
+        background: rgba(5, 16, 31, .94);
+        box-shadow: 0 18px 55px rgba(0, 0, 0, .52), 0 0 32px rgba(199, 255, 79, .1);
+        backdrop-filter: blur(14px);
+        transition: opacity .25s ease, visibility .25s ease;
+      }
+      .tutorial-panel[hidden] { display: none; }
+      .tutorial-badge { color: var(--cyan); font-size: .72rem; font-weight: 950; letter-spacing: .16em; }
+      .tutorial-heading { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 7px 0 5px; }
+      .tutorial-icon { font-size: clamp(2rem, 6vw, 3.2rem); line-height: 1; }
+      .tutorial-heading h2 { margin: 0; font-size: clamp(1.35rem, 4vw, 2rem); }
+      .tutorial-description { margin: 0 auto; max-width: 540px; color: #c0d2e6; font-size: .86rem; line-height: 1.65; }
+      .tutorial-cue { margin-top: 9px; color: var(--lime); font-size: clamp(1rem, 3vw, 1.25rem); font-weight: 950; }
+      .tutorial-progress { display: flex; justify-content: center; gap: 9px; margin-top: 10px; }
+      .tutorial-progress span { width: 34px; height: 7px; border-radius: 999px; background: rgba(255,255,255,.16); }
+      .tutorial-progress span.active { background: var(--cyan); box-shadow: 0 0 10px rgba(83,237,255,.75); }
+      .tutorial-progress span.done { background: var(--lime); }
+      .tutorial-start { margin-top: 13px; }
+      .tutorial-start[hidden] { display: none; }
+
+      .obstacle-zone.tutorial-show.from-left {
+        opacity: 1;
+        animation: tutorial-obstacle-left 2.8s ease-in-out infinite;
+      }
+      .reflect-zone.tutorial-show.incoming .boss-projectile {
+        animation: tutorial-projectile 2.7s ease-in-out infinite;
+      }
+
       .result-overlay {
         position: absolute;
         inset: 0;
@@ -912,6 +950,16 @@
         25% { transform: translateX(-12px); filter: brightness(1.8); }
         75% { transform: translateX(12px); filter: brightness(1.8); }
       }
+      @keyframes tutorial-obstacle-left {
+        0% { opacity: .25; transform: translateX(-115%); }
+        55%, 78% { opacity: 1; transform: translateX(105%); }
+        100% { opacity: .25; transform: translateX(-115%); }
+      }
+      @keyframes tutorial-projectile {
+        0% { transform: translate(260px, -120px) scale(.45); opacity: .35; }
+        60%, 82% { transform: translate(0, 145px) scale(1.16); opacity: 1; }
+        100% { transform: translate(260px, -120px) scale(.45); opacity: .35; }
+      }
       @keyframes projectile-incoming { from { transform: translate(280px, -130px) scale(.45); opacity: .3; } to { transform: translate(0, 150px) scale(1.18); opacity: 1; } }
       @keyframes projectile-reflected { from { transform: translate(0, 120px) scale(1.18); opacity: 1; } to { transform: translate(260px, -160px) scale(.28); opacity: 0; } }
       @keyframes projectile-hit { 0% { transform: translate(0, 145px) scale(1.1); } 70% { transform: translate(0, 145px) scale(2.6); opacity: .9; } 100% { transform: translate(0, 145px) scale(3.1); opacity: 0; } }
@@ -941,6 +989,8 @@
         .timer-card b, .score-card b { font-size: 1.2rem; }
         .enemy-zone { left: 50%; right: auto; transform: translateX(-50%) scale(.82); transform-origin: center bottom; }
         .obstacle-zone { top: 37%; width: 48%; transform-origin: center; }
+        .tutorial-panel { top: 150px; padding: 13px 14px; }
+        .tutorial-description { font-size: .76rem; }
         .sidebar { grid-template-columns: 1fr; }
       }
 
@@ -1087,12 +1137,26 @@
                 <div class="scan-item"><span>前屈</span><strong id="scan-bend">—</strong></div>
               </div>
               <div id="training-actions" class="training-actions" hidden>
-                <button id="battle-button" class="primary-button">バトル開始</button>
+                <button id="battle-button" class="primary-button">チュートリアルへ</button>
                 <button id="retry-scan-button" class="secondary-button">もう一度測る</button>
               </div>
               <p class="training-note">痛みを感じる動きは中止してください。表示値はカメラ上の相対値で、医療用の測定ではありません。</p>
             </div>
           </div>
+
+          <section id="tutorial-panel" class="tutorial-panel" aria-live="assertive" hidden>
+            <div id="tutorial-badge" class="tutorial-badge">あそびかた 1/3</div>
+            <div class="tutorial-heading">
+              <span id="tutorial-icon" class="tutorial-icon" aria-hidden="true">👾</span>
+              <h2 id="tutorial-title">モンスターを踏みつぶそう！</h2>
+            </div>
+            <p id="tutorial-description" class="tutorial-description">紫のモンスターが足元に出たら、両脚をそろえてジャンプします。</p>
+            <div id="tutorial-cue" class="tutorial-cue">両脚でジャンプ → 着地！</div>
+            <div id="tutorial-progress" class="tutorial-progress" aria-label="チュートリアルの進み具合">
+              <span class="active"></span><span></span><span></span>
+            </div>
+            <button id="tutorial-start-button" class="primary-button tutorial-start" type="button" hidden>本番スタート！</button>
+          </section>
 
           <div id="result-overlay" class="result-overlay hidden" aria-live="assertive">
             <div class="result-card">
@@ -1116,9 +1180,10 @@
             <div class="steps">
               <div class="step"><span class="step-number">1</span><div><strong>全身を映す</strong><span>頭から足先までカメラに入る位置へ移動します。</span></div></div>
               <div class="step"><span class="step-number">2</span><div><strong>ヒーロースキャン</strong><span>ねじる・両脚跳び・斜め下から胸を開く、の3種目で個人調整します。</span></div></div>
-              <div class="step"><span class="step-number">3</span><div><strong>ジャンプで攻撃</strong><span>測定した跳び幅に合わせて必殺技が発動します。</span></div></div>
-              <div class="step"><span class="step-number">4</span><div><strong>横に曲げて回避</strong><span>障害物が来た方向と反対側へ、上体をゆっくり曲げます。</span></div></div>
-              <div class="step"><span class="step-number">5</span><div><strong>ねじって反射</strong><span>ボスの弾が接近したら、脚を動かさず上体を大きくねじります。</span></div></div>
+              <div class="step"><span class="step-number">3</span><div><strong>チュートリアル</strong><span>3種類の障害物を実際に動いて対処し、遊び方を覚えます。</span></div></div>
+              <div class="step"><span class="step-number">4</span><div><strong>ジャンプで攻撃</strong><span>測定した跳び幅に合わせて必殺技が発動します。</span></div></div>
+              <div class="step"><span class="step-number">5</span><div><strong>横に曲げて回避</strong><span>障害物が来た方向と反対側へ、上体をゆっくり曲げます。</span></div></div>
+              <div class="step"><span class="step-number">6</span><div><strong>ねじって反射</strong><span>ボスの弾が接近したら、脚を動かさず上体を大きくねじります。</span></div></div>
             </div>
           </section>
 
@@ -1201,6 +1266,14 @@
       const trainingActions = document.querySelector("#training-actions");
       const battleButton = document.querySelector("#battle-button");
       const retryScanButton = document.querySelector("#retry-scan-button");
+      const tutorialPanel = document.querySelector("#tutorial-panel");
+      const tutorialBadge = document.querySelector("#tutorial-badge");
+      const tutorialIcon = document.querySelector("#tutorial-icon");
+      const tutorialTitle = document.querySelector("#tutorial-title");
+      const tutorialDescription = document.querySelector("#tutorial-description");
+      const tutorialCue = document.querySelector("#tutorial-cue");
+      const tutorialDots = [...document.querySelectorAll("#tutorial-progress span")];
+      const tutorialStartButton = document.querySelector("#tutorial-start-button");
       const resultOverlay = document.querySelector("#result-overlay");
       const resultTitle = document.querySelector("#result-title");
       const resultScore = document.querySelector("#result-score");
@@ -1345,6 +1418,9 @@
       let trainingLocked = false;
       let trainingAirborne = false;
       let trainingJumpCount = 0;
+      let tutorialStage = 0;
+      let tutorialLocked = false;
+      let tutorialAirborne = false;
       let twistPeakCount = 0;
       let twistAway = false;
       let diagonalDownSeen = false;
@@ -1372,6 +1448,7 @@
       const IMU_JUMP_HOLD_MS = 700;
       const CAMERA_JUMP_HOLD_MS = 520;
       const IMU_BEND_HOLD_MS = 900;
+      const TUTORIAL_STAGE_DELAY_MS = 1250;
       const BATTLE_DURATION_MS = 3 * 60 * 1000;
       const RESULT_DISPLAY_MS = 10 * 1000;
 
@@ -1504,13 +1581,13 @@
         if (gameMode === "training" && trainingStage === 2) {
           maxTrainingBendAngle = Math.max(maxTrainingBendAngle, imuBendAngle);
         }
-        if (gameMode === "battle" && imuGyroSmoothed >= imuTwistThreshold) {
+        if ((gameMode === "battle" || gameMode === "tutorial") && imuGyroSmoothed >= imuTwistThreshold) {
           imuTwistDetectedAt = now;
         }
-        if (gameMode === "battle" && imuJumpIntensity >= imuJumpThreshold) {
+        if ((gameMode === "battle" || gameMode === "tutorial") && imuJumpIntensity >= imuJumpThreshold) {
           imuJumpDetectedAt = now;
         }
-        if (gameMode === "battle" && imuBendAngle >= imuBendThreshold) {
+        if ((gameMode === "battle" || gameMode === "tutorial") && imuBendAngle >= imuBendThreshold) {
           imuBendDetectedAt = now;
         }
 
@@ -1522,11 +1599,11 @@
         imuTwistState.textContent = `${imuGyroSmoothed.toFixed(0)} / 判定 ${imuTwistThreshold.toFixed(0)} °/s`;
         imuJumpState.textContent = `${imuJumpIntensity.toFixed(2)} / 判定 ${imuJumpThreshold.toFixed(2)} g`;
         imuBendState.textContent = `${imuBendAngle.toFixed(1)} / 判定 ${imuBendThreshold.toFixed(1)} °`;
-        if (gameMode !== "battle") {
+        if (gameMode !== "battle" && gameMode !== "tutorial") {
           jumpFusionState.textContent = imuJumpCalibrationReady ? "MediaPipe＋IMU" : "IMU調整前";
           bendFusionState.textContent = imuBendCalibrationReady ? "MediaPipe＋IMU" : "IMU調整前";
         }
-        if (gameMode !== "battle" || !bossAttackActive) {
+        if ((gameMode !== "battle" && gameMode !== "tutorial") || !bossAttackActive) {
           fusionState.textContent = imuCalibrationReady ? "MediaPipe＋IMU" : "IMU調整前";
         }
         connectionLabel.textContent = video.srcObject ? "カメラ＋IMU接続中" : "IMU接続中";
@@ -1745,6 +1822,9 @@
         trainingLocked = false;
         trainingAirborne = false;
         trainingJumpCount = 0;
+        tutorialStage = 0;
+        tutorialLocked = false;
+        tutorialAirborne = false;
         twistPeakCount = 0;
         twistAway = false;
         diagonalDownSeen = false;
@@ -1791,6 +1871,8 @@
         bendFusionState.textContent = selectedInputMode === "sensor" ? "IMU調整中" : "MediaPipeのみ";
         calibrationState.textContent = "測定中";
         trainingOverlay.classList.remove("hidden");
+        tutorialPanel.hidden = true;
+        tutorialStartButton.hidden = true;
         trainingVisuals.hidden = false;
         demoPerson.className = "demo-person demo-stand";
         scanSummary.hidden = true;
@@ -1967,13 +2049,199 @@
           ? `カメラ ${Math.round(maxDiagonalBend * 100)}% / IMU ${maxTrainingBendAngle.toFixed(0)}°→${imuBendThreshold.toFixed(0)}°`
           : `${Math.round(maxDiagonalBend * 100)}%（カメラ）`;
         calibrationState.textContent = "個人調整済み";
-        setStatus("ヒーロースキャン完了", "画面の「バトル開始」を押してください");
+        setStatus("ヒーロースキャン完了", "「チュートリアルへ」を押して、3つの必殺アクションを練習しましょう");
         playSound("impactText", 0.6);
+      }
+
+      function beginTutorial() {
+        gameMode = "tutorial";
+        trainingOverlay.classList.add("hidden");
+        tutorialPanel.hidden = false;
+        tutorialStartButton.hidden = true;
+        finishBattleButton.hidden = true;
+        tutorialStage = 0;
+        tutorialLocked = false;
+        tutorialAirborne = false;
+        airborne = false;
+        attackArmed = false;
+        cameraJumpDetectedAt = -Infinity;
+        imuJumpDetectedAt = -Infinity;
+        showTutorialStage(0);
+      }
+
+      function clearTutorialObjects() {
+        enemyZone.className = "enemy-zone";
+        obstacleZone.className = "obstacle-zone";
+        obstacleZone.setAttribute("aria-hidden", "true");
+        reflectZone.className = "reflect-zone";
+        reflectZone.setAttribute("aria-hidden", "true");
+        obstacleActive = false;
+        obstacleResolved = false;
+        bossAttackActive = false;
+        bossAttackResolved = false;
+      }
+
+      function showTutorialStage(stage) {
+        tutorialStage = stage;
+        tutorialLocked = false;
+        tutorialAirborne = false;
+        cameraJumpDetectedAt = -Infinity;
+        imuJumpDetectedAt = -Infinity;
+        imuBendDetectedAt = -Infinity;
+        imuTwistDetectedAt = -Infinity;
+        clearTutorialObjects();
+
+        const stages = [
+          {
+            icon: "👾",
+            title: "モンスターを踏みつぶそう！",
+            description: "足元の紫のモンスターには、両脚ジャンプで攻撃します。跳んだあと、同じ場所へやさしく着地しましょう。",
+            cue: "両脚をそろえて ジャンプ → 着地！",
+          },
+          {
+            icon: "🚧",
+            title: "黄色い障害物をよけよう！",
+            description: "左から黄色い障害物が来ます。足と腰は動かさず、ぶつからないように上体を反対の右側へ曲げましょう。",
+            cue: "左から来るよ！ 上体を右へ曲げよう →",
+          },
+          {
+            icon: "🔮",
+            title: "ボスの弾を跳ね返そう！",
+            description: "光るエネルギー弾が近づいたら、足を動かさずに上体を大きくねじります。横へ曲げるのではなく、後ろを見るように回りましょう。",
+            cue: "弾が近づいた！ 上体を大きくねじろう！",
+          },
+        ];
+        const item = stages[stage];
+        tutorialBadge.textContent = `あそびかた ${stage + 1}/3`;
+        tutorialIcon.textContent = item.icon;
+        tutorialTitle.textContent = item.title;
+        tutorialDescription.textContent = item.description;
+        tutorialCue.textContent = item.cue;
+        tutorialDots.forEach((dot, index) => {
+          dot.className = index < stage ? "done" : index === stage ? "active" : "";
+        });
+
+        if (stage === 0) {
+          missionText.textContent = "紫のモンスターには両脚ジャンプ！";
+          setStatus("やってみよう：ジャンプ", "両脚をそろえて跳び、同じ場所へ着地してください");
+        } else if (stage === 1) {
+          obstacleActive = true;
+          obstacleSide = "left";
+          obstacleZone.className = "obstacle-zone tutorial-show from-left";
+          obstacleZone.setAttribute("aria-hidden", "false");
+          obstacleWarning.textContent = "左から接近 → 右へ！";
+          missionText.textContent = "左から来る障害物には右曲げ！";
+          setStatus("やってみよう：横曲げ", "足と腰を中央に保ち、肩と上体を右へ曲げてください");
+          playSound("obstacleWarning", 0.58);
+        } else {
+          bossAttackActive = true;
+          reflectZone.className = "reflect-zone tutorial-show incoming";
+          reflectZone.setAttribute("aria-hidden", "false");
+          missionText.textContent = "光る弾には上体ねじり！";
+          setStatus("やってみよう：ねじり反射", "横へ曲げず、後ろを見るように上体を回してください");
+          playSound("bossWarning", 0.58);
+        }
+        playSound("dataDisplay", 0.45);
+      }
+
+      function completeTutorialStage() {
+        if (tutorialLocked) return;
+        tutorialLocked = true;
+        tutorialDots[tutorialStage].className = "done";
+        tutorialTitle.textContent = "できた！ 大成功！";
+        tutorialCue.textContent = ["ジャンプでモンスターを倒せました！", "障害物を上手によけられました！", "ボスの弾を跳ね返せました！"][tutorialStage];
+        setStatus("チュートリアル成功！", tutorialCue.textContent);
+        playSound("confirmPrimary", 0.72);
+
+        if (tutorialStage === 0) {
+          enemyZone.classList.add("defeated");
+          playSound("landing", 0.72);
+          createParticles();
+        } else if (tutorialStage === 1) {
+          obstacleZone.classList.add("avoided");
+          playSound("dodgeWhoosh", 0.7);
+        } else {
+          reflectZone.className = "reflect-zone incoming reflected";
+          enemyZone.classList.add("boss-hit");
+          playSound("reflect", 0.78);
+        }
+
+        window.setTimeout(() => {
+          if (gameMode !== "tutorial") return;
+          if (tutorialStage < 2) showTutorialStage(tutorialStage + 1);
+          else finishTutorial();
+        }, TUTORIAL_STAGE_DELAY_MS);
+      }
+
+      function finishTutorial() {
+        gameMode = "tutorial-complete";
+        clearTutorialObjects();
+        tutorialDots.forEach((dot) => { dot.className = "done"; });
+        tutorialBadge.textContent = "チュートリアル クリア！";
+        tutorialIcon.textContent = "🌟";
+        tutorialTitle.textContent = "3つの動きをマスターしたよ！";
+        tutorialDescription.textContent = "モンスターはジャンプ、黄色い障害物は横曲げ、光る弾はねじりで対処します。準備ができたら本番へ進みましょう。";
+        tutorialCue.textContent = "ジャンプ・横曲げ・ねじりを使い分けよう！";
+        tutorialStartButton.hidden = false;
+        missionText.textContent = "チュートリアルクリア！";
+        setStatus("準備OK！", "「本番スタート！」を押すと3分間のバトルが始まります");
+        playSound("impactText", 0.65);
+      }
+
+      function updateTutorial(lm, now, hipRise, ankleRise, hipVelocity) {
+        if (tutorialLocked) return;
+
+        if (tutorialStage === 0) {
+          const imuJumpFresh = selectedInputMode === "sensor" && imuJumpCalibrationReady && now - imuLastReceivedAt <= IMU_STALE_MS;
+          const rising = hipVelocity < -0.00012;
+          const cameraJump = rising && hipRise > jumpHipThreshold && ankleRise > jumpAnkleThreshold;
+          if (!tutorialAirborne && cameraJump) cameraJumpDetectedAt = now;
+          const cameraRecent = now - cameraJumpDetectedAt <= CAMERA_JUMP_HOLD_MS;
+          const imuRecent = imuJumpFresh && now - imuJumpDetectedAt <= IMU_JUMP_HOLD_MS;
+          if (!tutorialAirborne && cameraRecent && (!imuJumpFresh || imuRecent)) {
+            tutorialAirborne = true;
+            tutorialCue.textContent = "そのまま同じ場所へ着地しよう！";
+            playSound("jump", 0.66);
+          }
+          if (tutorialAirborne && Math.abs(hipRise) < LANDING_THRESHOLD) {
+            tutorialAirborne = false;
+            completeTutorialStage();
+          }
+          return;
+        }
+
+        const shoulderX = average(lm[11].x, lm[12].x);
+        const hipX = average(lm[23].x, lm[24].x);
+        const shoulderWidth = Math.max(Math.abs(lm[11].x - lm[12].x), 0.04);
+
+        if (tutorialStage === 1) {
+          const bendRatio = (hipX - shoulderX) / Math.max(shoulderWidth, 0.08);
+          const imuFresh = selectedInputMode === "sensor" && imuBendCalibrationReady && now - imuLastReceivedAt <= IMU_STALE_MS;
+          const imuRecent = imuFresh && now - imuBendDetectedAt <= IMU_BEND_HOLD_MS;
+          const cameraBentRight = bendRatio >= BEND_THRESHOLD;
+          bendMeter.style.width = `${Math.min(Math.abs(bendRatio) / BEND_THRESHOLD * 100, 100)}%`;
+          bendValue.textContent = `${bendRatio > 0.08 ? "右" : bendRatio < -0.08 ? "左" : "中央"} ${Math.round(Math.min(Math.abs(bendRatio) / BEND_THRESHOLD, 1) * 100)}%`;
+          if (cameraBentRight && (!imuFresh || imuRecent)) completeTutorialStage();
+          return;
+        }
+
+        const compression = Math.max(0, 1 - shoulderWidth / Math.max(baselineShoulderWidth, 0.04));
+        const sideBend = Math.abs(hipX - shoulderX) / Math.max(baselineShoulderWidth, 0.08);
+        const imuFresh = selectedInputMode === "sensor" && imuCalibrationReady && now - imuLastReceivedAt <= IMU_STALE_MS;
+        const imuRecent = imuFresh && now - imuTwistDetectedAt <= IMU_TWIST_HOLD_MS;
+        const cameraTwist = compression >= twistReflectThreshold && sideBend < 0.27;
+        twistMeter.style.width = `${Math.min(compression / Math.max(twistReflectThreshold, .01) * 100, 100)}%`;
+        twistValue.textContent = imuFresh
+          ? `カメラ ${Math.round(Math.min(compression / Math.max(twistReflectThreshold, .01), 1) * 100)}% / IMU ${Math.round(imuGyroSmoothed)}°/s`
+          : `${Math.round(Math.min(compression / Math.max(twistReflectThreshold, .01), 1) * 100)}%`;
+        if (cameraTwist && (!imuFresh || imuRecent)) completeTutorialStage();
       }
 
       function beginBattle() {
         gameMode = "battle";
         trainingOverlay.classList.add("hidden");
+        tutorialPanel.hidden = true;
+        clearTutorialObjects();
         const now = performance.now();
         imuJumpIntensity = 0;
         imuJumpDetectedAt = -Infinity;
@@ -2057,6 +2325,8 @@
         trainingPreviewCtx.clearRect(0, 0, trainingPreviewCanvas.width, trainingPreviewCanvas.height);
         resultOverlay.classList.add("hidden");
         trainingOverlay.classList.add("hidden");
+        tutorialPanel.hidden = true;
+        tutorialStartButton.hidden = true;
         startOverlay.classList.remove("hidden");
         startButton.disabled = false;
         modeButtons.forEach((button) => { button.disabled = false; });
@@ -2131,6 +2401,11 @@
 
         if (gameMode === "training") {
           updateTraining(lm, hipY, ankleY);
+          return;
+        }
+
+        if (gameMode === "tutorial") {
+          updateTutorial(lm, now, hipRise, ankleRise, hipVelocity);
           return;
         }
 
@@ -2550,7 +2825,8 @@
         playSound("confirmSecondary", 0.52);
         resetCalibration();
       });
-      battleButton.addEventListener("click", beginBattle);
+      battleButton.addEventListener("click", beginTutorial);
+      tutorialStartButton.addEventListener("click", beginBattle);
       finishBattleButton.addEventListener("click", () => {
         playSound("confirmSecondary", 0.52);
         finishBattle(performance.now(), "manual");
