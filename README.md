@@ -247,7 +247,7 @@ flowchart LR
     M5["肩甲骨付近の M5StickC PLUS2"] -->|"Wi-Fi / UDP 4210"| Bridge["Node.js IMU Bridge"]
     Bridge -->|"WebSocket 8080"| Browser["ブラウザゲーム"]
     Pose --> Browser
-    Browser --> Judge["ジャンプ・横曲げ・ねじり判定"]
+    Browser --> Judge["両脚跳び・斜め下＋胸反らし・ねじり判定"]
     Judge --> Result["得点・結果画面"]
 ```
 
@@ -263,6 +263,7 @@ PCへ送り、`imu-bridge.cjs`がブラウザで受信できるWebSocketへ変�
 | `imu-bridge/package.json` | Bridgeで使用する`ws`ライブラリなどの設定 |
 | `imu-receiver.cjs` | IMUのUDP受信だけを確認するための初期テスト用プログラム |
 | `assets/sounds/` | ジャンプ、着地、警告、反射などの効果音 |
+| `assets/reference/` | 3種目のお手本動画（ねじり、両脚跳び、斜め下曲げ・胸反らし） |
 
 ### `index.html`内の主な処理
 
@@ -275,10 +276,23 @@ PCへ送り、`imu-bridge.cjs`がブラウザで受信できるWebSocketへ変�
 | `resetCalibration()` | 身体サイズと個人別判定値の測定を初期化 |
 | `updateTraining()` | ねじり、両脚跳び、斜め下曲げ・胸反らしの練習を判定 |
 | `updateJumpDetector()` | 腰と足首の上昇とIMU加速度を組み合わせ、着地を判定 |
-| `updateBendDetector()` | 肩と腰のずれによる方向とIMU傾き角を組み合わせて回避を判定 |
+| `updateBendDetector()` | 「足先へ斜め下に曲げる→起きて胸を開く」の順序と姿勢を判定 |
 | `updateBossAttack()` | MediaPipeとIMUを組み合わせてねじり反射を判定 |
 | `finishBattle()` | 3分経過または途中終了時に結果を集計 |
 | `returnToTop()` | カメラを停止してトップ画面へ戻す |
+
+## ラジオ体操準拠の動作品質スコア
+
+成功・失敗だけでなく、お手本への一致度を0～100%で算出します。MediaPipeのみモードでは、
+お手本動画にもPose Landmarkerを適用し、腰中心と胴体長で正規化した肩・ひじ・手首・腰・
+ひざ・足首の座標をプレイヤーと比較します。動作固有の特徴量も合わせ、65%以上を成功、
+88%以上を「たいへんよくできました」と表示します。
+
+- 両脚跳び：跳躍高、左右の足の同時性、脚のそろい、体幹の直立を評価
+- 斜め下曲げ・胸反らし：足先へ近づく深さと方向、ひざの伸び、起き上がり、胸と腕の開きを順番に評価
+- 体のねじり：見かけの肩幅の縮み、横曲げの少なさ、腰位置の安定、ひじの伸びを評価
+
+得点は固定ではなく一致度に比例します。研究用JSONの動作イベントにも`quality`と`points`を保存します。
 
 ## IMU通信データ
 
@@ -303,7 +317,7 @@ M5StickC PLUS2からBridgeへ、次のようなJSONを送信します。
 
 「センサーあり」を選んでも、IMUデータが1.5秒以上届かない場合はゲームを停止せず、
 MediaPipeだけの判定へ切り替えます。IMU Bridgeが再接続されると、画面のIMU状態と
-数値表示が再び更新されます。ジャンプの加速度、横曲げの傾き、ねじりのジャイロ値を
+数値表示が再び更新されます。ジャンプの加速度、斜め下へ曲げる傾き、ねじりのジャイロ値を
 有効に取得できなかった場合も、対応する判定はMediaPipeのみで継続します。
 
 ## 公開版とローカル版
@@ -328,7 +342,7 @@ MediaPipeだけの判定へ切り替えます。IMU Bridgeが再接続される�
 - `jump.mp3`: ジャンプ開始
 - `landing.mp3`: 敵を踏み潰した着地
 - `obstacle-warning.mp3`: 障害物の接近
-- `dodge-whoosh.mp3`: 横曲げ回避成功
+- `dodge-whoosh.mp3`: 斜め下曲げ・胸反らしによる回避成功
 - `boss-warning.mp3`: ボスのエネルギー弾
 - `reflect.mp3`: ねじり反射成功
 - `sword-draw.mp3`: ボス戦開始
