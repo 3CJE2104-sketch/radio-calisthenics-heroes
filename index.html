@@ -758,6 +758,7 @@
       .scan-item span { display: block; color: var(--muted); font-size: .7rem; }
       .scan-item strong { display: block; margin-top: 4px; color: var(--lime); font-size: 1rem; }
       .training-actions { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+      .phase-skip-button { margin: 12px auto 0; }
       .training-note { margin-top: 15px !important; font-size: .72rem; }
 
       .training-visuals {
@@ -893,7 +894,7 @@
       }
 
       .primary-button:hover, .secondary-button:hover { transform: translateY(-2px); }
-      .primary-button:disabled { opacity: .58; cursor: wait; transform: none; }
+      .primary-button:disabled, .secondary-button:disabled { opacity: .58; cursor: wait; transform: none; }
 
       .safety { margin-top: 18px !important; font-size: .74rem; color: #8195ad !important; }
 
@@ -1233,6 +1234,7 @@
               <div id="training-dots" class="training-dots" aria-hidden="true">
                 <span class="training-dot active"></span><span class="training-dot"></span><span class="training-dot"></span>
               </div>
+              <button id="phase-skip-button" class="secondary-button phase-skip-button" type="button">身体調整をスキップして練習へ</button>
               <div id="scan-summary" class="scan-grid" hidden>
                 <div class="scan-item"><span>肩幅</span><strong id="scan-shoulder">—</strong></div>
                 <div class="scan-item"><span>胴体</span><strong id="scan-torso">—</strong></div>
@@ -1390,6 +1392,7 @@
       const trainingCue = document.querySelector("#training-cue");
       const trainingFill = document.querySelector("#training-fill");
       const trainingDots = [...document.querySelectorAll(".training-dot")];
+      const phaseSkipButton = document.querySelector("#phase-skip-button");
       const scanSummary = document.querySelector("#scan-summary");
       const trainingActions = document.querySelector("#training-actions");
       const battleButton = document.querySelector("#battle-button");
@@ -1568,6 +1571,8 @@
       let gameMode = "calibration";
       let trainingStage = 0;
       let trainingLocked = false;
+      let calibrationSkipped = false;
+      let trainingSkippedCount = 0;
       let trainingAirborne = false;
       let trainingJumpCount = 0;
       let tutorialStage = 0;
@@ -2303,6 +2308,8 @@
         twistValue.textContent = "0%";
         trainingStage = 0;
         trainingLocked = false;
+        calibrationSkipped = false;
+        trainingSkippedCount = 0;
         trainingAirborne = false;
         trainingJumpCount = 0;
         tutorialStage = 0;
@@ -2368,6 +2375,9 @@
         hideFormCoach();
         scanSummary.hidden = true;
         trainingActions.hidden = true;
+        phaseSkipButton.hidden = false;
+        phaseSkipButton.disabled = false;
+        phaseSkipButton.textContent = "身体調整をスキップして練習へ";
         trainingDots.forEach((dot, index) => dot.className = `training-dot${index === 0 ? " active" : ""}`);
         trainingProgress.textContent = "HERO SCAN 0/3";
         trainingTitle.textContent = "身体サイズを確認中";
@@ -2384,6 +2394,32 @@
 
       function average(a, b) { return (a + b) / 2; }
 
+      function applyCalibrationBaseline() {
+        const defaults = {
+          hipY: 0.58,
+          hipX: 0.50,
+          ankleY: 0.88,
+          leftAnkleY: 0.88,
+          rightAnkleY: 0.88,
+          shoulderY: 0.32,
+          shoulderWidth: 0.18,
+          torsoLength: 0.26,
+          legLength: 0.40,
+        };
+        const measured = (key) => calibrationSamples.length
+          ? median(calibrationSamples.map((sample) => sample[key]))
+          : defaults[key];
+        baselineHipY = measured("hipY");
+        baselineHipX = measured("hipX");
+        baselineAnkleY = measured("ankleY");
+        baselineLeftAnkleY = measured("leftAnkleY");
+        baselineRightAnkleY = measured("rightAnkleY");
+        baselineShoulderY = measured("shoulderY");
+        baselineShoulderWidth = measured("shoulderWidth");
+        baselineTorsoLength = measured("torsoLength");
+        baselineLegLength = measured("legLength");
+      }
+
       function startTraining() {
         gameMode = "training";
         trainingStage = 0;
@@ -2393,6 +2429,11 @@
       function setTrainingStage(stage) {
         trainingStage = stage;
         trainingLocked = false;
+        phaseSkipButton.hidden = false;
+        phaseSkipButton.disabled = false;
+        phaseSkipButton.textContent = stage < 2
+          ? "この練習をスキップして次へ"
+          : "この練習をスキップして完了へ";
         if (stage === 1) {
           imuJumpIntensity = 0;
           imuJumpDetectedAt = -Infinity;
@@ -2433,6 +2474,7 @@
       function completeTrainingStage() {
         if (trainingLocked) return;
         trainingLocked = true;
+        phaseSkipButton.disabled = true;
         trainingFill.style.width = "100%";
         trainingCue.textContent = "OK! きれいに検出できました";
         trainingDots[trainingStage].className = "training-dot done";
@@ -2441,6 +2483,31 @@
           if (trainingStage < 2) setTrainingStage(trainingStage + 1);
           else finishTraining();
         }, 850);
+      }
+
+      function skipCurrentAdjustment() {
+        if (gameMode === "calibration") {
+          applyCalibrationBaseline();
+          calibrationSkipped = true;
+          calibrationState.textContent = calibrationSamples.length ? "途中データで継続" : "既定値で継続";
+          recalibrateButton.disabled = false;
+          recordResearchEvent("calibration_skipped", { collectedFrames: calibrationSamples.length });
+          playSound("confirmSecondary", 0.52);
+          startTraining();
+          return;
+        }
+        if (gameMode !== "training" || trainingLocked) return;
+        trainingLocked = true;
+        trainingSkippedCount += 1;
+        phaseSkipButton.disabled = true;
+        trainingDots[trainingStage].className = "training-dot done";
+        trainingCue.textContent = "スキップして次へ進みます";
+        recordResearchEvent("training_stage_skipped", { stage: trainingStage });
+        playSound("confirmSecondary", 0.52);
+        window.setTimeout(() => {
+          if (trainingStage < 2) setTrainingStage(trainingStage + 1);
+          else finishTraining();
+        }, 350);
       }
 
       function updateTraining(lm, hipY, ankleY) {
@@ -2533,14 +2600,18 @@
           imuBendCalibrationReady = true;
         }
         trainingProgress.textContent = "HERO SCAN COMPLETE";
-        trainingTitle.textContent = "あなた専用の判定に調整しました";
-        trainingDescription.textContent = "身体の相対サイズと動ける範囲、IMUの加速度・傾き・回転速度を個人別判定に反映します。";
+        const usedStandardSettings = calibrationSkipped || trainingSkippedCount > 0;
+        trainingTitle.textContent = usedStandardSettings ? "標準の判定で準備しました" : "あなた専用の判定に調整しました";
+        trainingDescription.textContent = usedStandardSettings
+          ? "スキップした項目には標準の判定基準を使用します。あとから「もう一度測る」で調整できます。"
+          : "身体の相対サイズと動ける範囲、IMUの加速度・傾き・回転速度を個人別判定に反映します。";
         trainingCue.textContent = "準備完了！";
         referenceVideo.pause();
         referenceCaption.textContent = "3種目の基準動作を記録しました";
         trainingFill.style.width = "100%";
         scanSummary.hidden = false;
         trainingActions.hidden = false;
+        phaseSkipButton.hidden = true;
         document.querySelector("#scan-shoulder").textContent = relativeLabel(baselineShoulderWidth);
         document.querySelector("#scan-torso").textContent = relativeLabel(baselineTorsoLength);
         document.querySelector("#scan-leg").textContent = relativeLabel(baselineLegLength);
@@ -2554,7 +2625,7 @@
         document.querySelector("#scan-bend").textContent = selectedInputMode === "sensor" && maxTrainingBendAngle >= 8
           ? `カメラ ${Math.round(maxDiagonalBend * 100)}% / IMU ${maxTrainingBendAngle.toFixed(0)}°→${imuBendThreshold.toFixed(0)}°`
           : `${Math.round(maxDiagonalBend * 100)}%（カメラ）`;
-        calibrationState.textContent = "個人調整済み";
+        calibrationState.textContent = usedStandardSettings ? "標準設定を使用" : "個人調整済み";
         setStatus("ヒーロースキャン完了", "「チュートリアルへ」を押して、3つの必殺アクションを練習しましょう");
         playSound("impactText", 0.6);
       }
@@ -2934,15 +3005,7 @@
           trainingFill.style.width = `${progress * 100}%`;
 
           if (calibrationSamples.length >= CALIBRATION_FRAMES) {
-            baselineHipY = median(calibrationSamples.map((sample) => sample.hipY));
-            baselineHipX = median(calibrationSamples.map((sample) => sample.hipX));
-            baselineAnkleY = median(calibrationSamples.map((sample) => sample.ankleY));
-            baselineLeftAnkleY = median(calibrationSamples.map((sample) => sample.leftAnkleY));
-            baselineRightAnkleY = median(calibrationSamples.map((sample) => sample.rightAnkleY));
-            baselineShoulderY = median(calibrationSamples.map((sample) => sample.shoulderY));
-            baselineShoulderWidth = median(calibrationSamples.map((sample) => sample.shoulderWidth));
-            baselineTorsoLength = median(calibrationSamples.map((sample) => sample.torsoLength));
-            baselineLegLength = median(calibrationSamples.map((sample) => sample.legLength));
+            applyCalibrationBaseline();
             calibrationState.textContent = "動作確認中";
             recalibrateButton.disabled = false;
             startTraining();
@@ -3459,6 +3522,7 @@
         playSound("confirmSecondary", 0.52);
         resetCalibration();
       });
+      phaseSkipButton.addEventListener("click", skipCurrentAdjustment);
       returnTopButton.addEventListener("click", () => {
         playSound("confirmSecondary", 0.52);
         window.setTimeout(returnToTop, 120);
