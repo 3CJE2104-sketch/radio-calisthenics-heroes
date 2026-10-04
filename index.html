@@ -1219,7 +1219,7 @@
               <p id="training-description">正面を向き、頭から足先まで映してください。</p>
               <div id="training-visuals" class="training-visuals">
                 <div class="training-view">
-                  <span class="training-view-label">あなたの動き＋骨格</span>
+                  <span class="training-view-label">あなた：明るい骨格／お手本：薄い黄色</span>
                   <canvas id="training-preview-canvas" width="640" height="360" aria-label="カメラ映像とMediaPipeの骨格"></canvas>
                 </div>
                 <div class="training-view" aria-label="ラジオ体操のお手本動画">
@@ -2045,6 +2045,61 @@
         return clamp01(1 - normalizedError / 1.05);
       }
 
+      function alignReferenceLandmarksToPlayer(playerLandmarks) {
+        if (!latestReferenceLandmarks || !playerLandmarks) return null;
+        const reference = latestReferenceLandmarks;
+        const keyIndices = [11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28];
+        const bodyFrame = (points) => {
+          const hipCenter = {
+            x: average(points[23].x, points[24].x),
+            y: average(points[23].y, points[24].y),
+          };
+          const shoulderCenter = {
+            x: average(points[11].x, points[12].x),
+            y: average(points[11].y, points[12].y),
+          };
+          const shoulderWidth = Math.hypot(points[11].x - points[12].x, points[11].y - points[12].y);
+          const torsoLength = Math.hypot(shoulderCenter.x - hipCenter.x, shoulderCenter.y - hipCenter.y);
+          return { hipCenter, scale: Math.max(shoulderWidth, torsoLength, 0.06) };
+        };
+        const referenceFrame = bodyFrame(reference);
+        const playerFrame = bodyFrame(playerLandmarks);
+        const normalizedPoint = (point, frame, mirrored = false) => ({
+          x: (point.x - frame.hipCenter.x) / frame.scale * (mirrored ? -1 : 1),
+          y: (point.y - frame.hipCenter.y) / frame.scale,
+        });
+        const alignmentError = (mirrored) => keyIndices.reduce((total, index) => {
+          const refPoint = normalizedPoint(reference[index], referenceFrame, mirrored);
+          const playerPoint = normalizedPoint(playerLandmarks[index], playerFrame);
+          return total + Math.hypot(refPoint.x - playerPoint.x, refPoint.y - playerPoint.y);
+        }, 0);
+        const mirrored = alignmentError(true) < alignmentError(false);
+
+        return reference.map((point) => {
+          const normalized = normalizedPoint(point, referenceFrame, mirrored);
+          return {
+            ...point,
+            x: playerFrame.hipCenter.x + normalized.x * playerFrame.scale,
+            y: playerFrame.hipCenter.y + normalized.y * playerFrame.scale,
+          };
+        });
+      }
+
+      function drawReferenceGhost(utils, playerLandmarks) {
+        const alignedReference = alignReferenceLandmarksToPlayer(playerLandmarks);
+        if (!alignedReference || !utils) return;
+        utils.drawConnectors(alignedReference, PoseLandmarker.POSE_CONNECTIONS, {
+          color: "rgba(255, 222, 74, 0.30)",
+          lineWidth: 5,
+        });
+        utils.drawLandmarks(alignedReference, {
+          color: "rgba(255, 249, 210, 0.46)",
+          fillColor: "rgba(255, 205, 55, 0.18)",
+          lineWidth: 1,
+          radius: 4,
+        });
+      }
+
       function blendWithReference(featureQuality, lm) {
         const reference = skeletonSimilarity(lm);
         const referenceWeight = selectedInputMode === "mediapipe" ? .30 : .18;
@@ -2065,6 +2120,21 @@
           element.play().catch(() => {});
         });
         referenceCaption.textContent = caption || "お手本の骨格と同じ形・順序を目指してください";
+      }
+
+      function setCalibrationReference() {
+        setReferenceMotion("twist", "薄い黄色のお手本骨格に身体を重ね、正面を向いて静止してください");
+        lastReferenceVideoTime = -1;
+        lastReferenceDetectionAt = -Infinity;
+        latestReferenceLandmarks = null;
+        [referenceVideo, coachVideo].forEach((element) => {
+          const freezeAtStart = () => {
+            element.currentTime = 0;
+            element.pause();
+          };
+          if (element.readyState >= 1) freezeAtStart();
+          else element.addEventListener("loadedmetadata", freezeAtStart, { once: true });
+        });
       }
 
       function showFormCoach(kind, label) {
@@ -2190,6 +2260,7 @@
         trainingPreviewCtx.drawImage(video, 0, 0, width, height);
 
         if (lm && trainingDrawingUtils) {
+          drawReferenceGhost(trainingDrawingUtils, lm);
           trainingDrawingUtils.drawConnectors(lm, PoseLandmarker.POSE_CONNECTIONS, {
             color: "rgba(83, 237, 255, 0.95)",
             lineWidth: 4,
@@ -2293,8 +2364,7 @@
         tutorialPanel.hidden = true;
         tutorialStartButton.hidden = true;
         trainingVisuals.hidden = false;
-        referenceVideo.removeAttribute("src");
-        referenceVideo.load();
+        setCalibrationReference();
         hideFormCoach();
         scanSummary.hidden = true;
         trainingActions.hidden = true;
@@ -3316,7 +3386,7 @@
         resizeCanvas();
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        const activeReferenceVideo = gameMode === "training" ? referenceVideo : coachVideo;
+        const activeReferenceVideo = gameMode === "calibration" || gameMode === "training" ? referenceVideo : coachVideo;
         if (referenceLandmarker && activeReferenceVideo.readyState >= 2 && activeReferenceVideo.currentTime !== lastReferenceVideoTime && now - lastReferenceDetectionAt >= 90) {
           lastReferenceVideoTime = activeReferenceVideo.currentTime;
           lastReferenceDetectionAt = now;
@@ -3335,6 +3405,7 @@
           if (result.landmarks.length) {
             const lm = result.landmarks[0];
             recordResearchPose(lm, now);
+            drawReferenceGhost(drawingUtils, lm);
             drawingUtils.drawConnectors(lm, PoseLandmarker.POSE_CONNECTIONS, {
               color: "rgba(83, 237, 255, 0.78)",
               lineWidth: 3,
