@@ -1263,6 +1263,7 @@
             <div id="tutorial-progress" class="tutorial-progress" aria-label="チュートリアルの進み具合">
               <span class="active"></span><span></span><span></span>
             </div>
+            <button id="tutorial-next-button" class="secondary-button" type="button">次へ（できなくても進める）</button>
             <button id="tutorial-start-button" class="primary-button tutorial-start" type="button" hidden>本番スタート！</button>
           </section>
 
@@ -1405,6 +1406,7 @@
       const tutorialCue = document.querySelector("#tutorial-cue");
       const tutorialDots = [...document.querySelectorAll("#tutorial-progress span")];
       const tutorialStartButton = document.querySelector("#tutorial-start-button");
+      const tutorialNextButton = document.querySelector("#tutorial-next-button");
       const resultOverlay = document.querySelector("#result-overlay");
       const resultTitle = document.querySelector("#result-title");
       const resultScore = document.querySelector("#result-score");
@@ -1576,6 +1578,7 @@
       let trainingAirborne = false;
       let trainingJumpCount = 0;
       let tutorialStage = 0;
+      let tutorialSkippedCount = 0;
       let tutorialLocked = false;
       let tutorialAirborne = false;
       let twistPeakCount = 0;
@@ -2631,6 +2634,7 @@
       }
 
       function beginTutorial() {
+        tutorialSkippedCount = 0;
         gameMode = "tutorial";
         recordResearchEvent("tutorial_start");
         trainingOverlay.classList.add("hidden");
@@ -2660,6 +2664,9 @@
       }
 
       function showTutorialStage(stage) {
+        tutorialNextButton.hidden = false;
+        tutorialNextButton.disabled = false;
+        tutorialNextButton.textContent = stage < 2 ? "次へ（できなくても進める）" : "練習を終える（できなくても進める）";
         tutorialStage = stage;
         tutorialLocked = false;
         tutorialAirborne = false;
@@ -2732,6 +2739,7 @@
       function completeTutorialStage() {
         if (tutorialLocked) return;
         tutorialLocked = true;
+        tutorialNextButton.disabled = true;
         recordResearchEvent("tutorial_stage_success", { stage: tutorialStage + 1, action: ["jump", "diagonal_bend_chest_open", "twist"][tutorialStage], quality: currentFormQuality });
         tutorialDots[tutorialStage].className = "done";
         tutorialTitle.textContent = "できた！ 大成功！";
@@ -2759,19 +2767,34 @@
         }, TUTORIAL_STAGE_DELAY_MS);
       }
 
+      function skipTutorialStage() {
+        if (gameMode !== "tutorial" || tutorialLocked) return;
+        tutorialLocked = true;
+        tutorialNextButton.disabled = true;
+        tutorialSkippedCount += 1;
+        recordResearchEvent("tutorial_stage_skipped", {
+          stage: tutorialStage + 1,
+          action: ["jump", "diagonal_bend_chest_open", "twist"][tutorialStage],
+        });
+        playSound("confirmSecondary", 0.52);
+        if (tutorialStage < 2) showTutorialStage(tutorialStage + 1);
+        else finishTutorial();
+      }
+
       function finishTutorial() {
+        tutorialNextButton.hidden = true;
         gameMode = "tutorial-complete";
         hideFormCoach();
-        recordResearchEvent("tutorial_complete");
+        recordResearchEvent("tutorial_complete", { skippedStages: tutorialSkippedCount });
         clearTutorialObjects();
         tutorialDots.forEach((dot) => { dot.className = "done"; });
-        tutorialBadge.textContent = "チュートリアル クリア！";
+        tutorialBadge.textContent = tutorialSkippedCount ? "チュートリアル終了！" : "チュートリアル クリア！";
         tutorialIcon.textContent = "🌟";
-        tutorialTitle.textContent = "3つの動きをマスターしたよ！";
+        tutorialTitle.textContent = tutorialSkippedCount ? "本番へ進もう！" : "3つの動きをマスターしたよ！";
         tutorialDescription.textContent = "両脚跳び、斜め下から胸を開く運動、体のねじりを、お手本に近い形で使い分けます。";
         tutorialCue.textContent = "本番も一致度65%以上を目指そう！";
         tutorialStartButton.hidden = false;
-        missionText.textContent = "チュートリアルクリア！";
+        missionText.textContent = tutorialSkippedCount ? "チュートリアル終了！" : "チュートリアルクリア！";
         setStatus("準備OK！", "「本番スタート！」を押すと3分間のバトルが始まります");
         playSound("impactText", 0.65);
       }
@@ -3513,6 +3536,7 @@
       });
       battleButton.addEventListener("click", beginTutorial);
       tutorialStartButton.addEventListener("click", beginBattle);
+      tutorialNextButton.addEventListener("click", skipTutorialStage);
       researchDownloadButton.addEventListener("click", downloadResearchData);
       finishBattleButton.addEventListener("click", () => {
         playSound("confirmSecondary", 0.52);
