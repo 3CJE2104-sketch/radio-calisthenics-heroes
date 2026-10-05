@@ -1642,13 +1642,57 @@
         return Number(Number(value).toFixed(digits));
       }
 
+      const researchBodyParts = [
+        "鼻", "左目の内側", "左目", "左目の外側", "右目の内側", "右目", "右目の外側",
+        "左耳", "右耳", "口の左端", "口の右端", "左肩", "右肩", "左肘", "右肘",
+        "左手首", "右手首", "左小指", "右小指", "左人差し指", "右人差し指",
+        "左親指", "右親指", "左腰", "右腰", "左膝", "右膝", "左足首", "右足首",
+        "左かかと", "右かかと", "左つま先", "右つま先",
+      ];
+      let currentReferenceMotion = null;
+
+      function researchMotionContext() {
+        const phaseNames = {
+          top: "トップ画面", calibration: "身体調整", training: "身体調整の運動練習",
+          summary: "調整結果の確認", tutorial: "チュートリアル練習",
+          "tutorial-complete": "本番開始待ち", battle: "本番", result: "結果表示",
+        };
+        const exercises = {
+          diagonal: "体を斜め下に曲げ胸を反らす運動",
+          jump: "両脚で跳ぶ運動", twist: "体をねじる運動",
+          calibration: "身体調整（正面で静止）", none: "運動の指示なし",
+        };
+        let exerciseId = "none";
+        if (gameMode === "calibration") exerciseId = "calibration";
+        if (gameMode === "training") exerciseId = ["twist", "jump", "diagonal"][trainingStage];
+        if (gameMode === "tutorial") exerciseId = ["jump", "diagonal", "twist"][tutorialStage];
+        if (gameMode === "battle") exerciseId = currentReferenceMotion || "none";
+        return {
+          phaseName: phaseNames[gameMode] || gameMode,
+          exerciseId,
+          exerciseName: exercises[exerciseId],
+          exerciseLabelSource: "ゲームが指示する運動（実際の運動の自動分類ではありません）",
+          practiceStep: gameMode === "training" ? trainingStage + 1 : gameMode === "tutorial" ? tutorialStage + 1 : null,
+          obstacleActive: gameMode === "battle" && obstacleActive,
+          bossAttackActive: gameMode === "battle" && bossAttackActive,
+        };
+      }
+
       function setResearchConsent(consented) {
         researchConsent = consented;
         researchDownloaded = false;
         lastResearchPoseAt = -Infinity;
         lastResearchImuAt = -Infinity;
         researchSession = consented ? {
-          schemaVersion: 1,
+          schemaVersion: 2,
+          dataGuide: {
+            description: "各サンプルのphaseNameは場面、exerciseNameはその時にゲームが指示している運動です。実際にその運動を正しく行ったことを保証するラベルではありません。",
+            time: "tMsは記録開始からのミリ秒、elapsedSecondsは秒です。",
+            coordinates: "xは元のカメラ画像の左端0・右端1、yは上端0・下端1。画面表示は左右反転しています。zは腰中心を基準とした相対的な奥行きで、小さいほどカメラに近い値です。メートルではありません。",
+            visibility: "visibilityは部位が見えていると推定される度合い（0〜1）です。",
+            landmarks: "landmarksは従来互換用の配列 [x,y,z,visibility]。namedLandmarksは同じ値を日本語の部位名付きで記録したものです。左右はプレイヤー本人を基準にします。",
+            imu: "accelは[x,y,z]、単位g。gyroは[x,y,z]、単位°/秒。軸はセンサー本体基準です。",
+          },
           sessionId: typeof crypto.randomUUID === "function"
             ? crypto.randomUUID()
             : `session-${Date.now()}-${Math.random().toString(16).slice(2)}`,
@@ -1681,6 +1725,7 @@
         researchSession.events.push({
           tMs: researchElapsed(),
           phase: gameMode,
+          ...researchMotionContext(),
           type,
           ...detail,
         });
@@ -1692,6 +1737,15 @@
         researchSession.poseSamples.push({
           tMs: researchElapsed(now),
           phase: gameMode,
+          elapsedSeconds: rounded(researchElapsed(now) / 1000, 3),
+          ...researchMotionContext(),
+          fullBodyVisible: fullBodyVisible(lm),
+          namedLandmarks: lm.map((point, index) => ({
+            index,
+            bodyPart: researchBodyParts[index],
+            x: rounded(point.x), y: rounded(point.y), z: rounded(point.z),
+            visibility: rounded(point.visibility ?? 0, 4),
+          })),
           landmarks: lm.map((point) => [
             rounded(point.x),
             rounded(point.y),
@@ -1707,6 +1761,8 @@
         researchSession.imuSamples.push({
           tMs: researchElapsed(now),
           phase: gameMode,
+          elapsedSeconds: rounded(researchElapsed(now) / 1000, 3),
+          ...researchMotionContext(),
           accel: [rounded(ax, 4), rounded(ay, 4), rounded(az, 4)],
           gyro: [rounded(gx, 3), rounded(gy, 3), rounded(gz, 3)],
         });
@@ -1733,7 +1789,7 @@
           },
           result: { score, defeats, avoided, reflectedAttacks },
         };
-        const blob = new Blob([JSON.stringify(payload)], { type: "application/json;charset=utf-8" });
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
         const link = document.createElement("a");
         const stamp = finishedAt.replace(/[:.]/g, "-");
         const url = URL.createObjectURL(blob);
@@ -2117,6 +2173,7 @@
       function setReferenceMotion(kind, caption = "") {
         const src = referenceClips[kind];
         if (!src) return;
+        currentReferenceMotion = kind;
         [referenceVideo, coachVideo].forEach((element) => {
           if (element.getAttribute("src") !== src) {
             element.src = src;
