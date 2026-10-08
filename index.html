@@ -810,6 +810,9 @@
       .form-coach video { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: contain; background: #020710; }
       /* Fit the complete source frame; scaling/cropping here cuts off hands and feet. */
       .reference-video, .form-coach video { transform: none; clip-path: none; object-fit: contain; }
+      .reference-display { position: relative; aspect-ratio: 16 / 9; background: #000; }
+      .reference-display video { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; pointer-events: none; }
+      .reference-display canvas { display: block; width: 100%; height: 100%; }
       .form-coach-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; }
       .form-coach-head span { color: var(--cyan); font-size: .68rem; font-weight: 950; letter-spacing: .08em; }
       .form-coach-head strong { color: var(--lime); font-size: 1rem; }
@@ -1236,7 +1239,10 @@
                 </div>
                 <div class="training-view" aria-label="ラジオ体操のお手本動画">
                   <span class="training-view-label">ラジオ体操のお手本</span>
-                  <video id="reference-video" class="reference-video" playsinline muted loop preload="auto"></video>
+                  <div class="reference-display">
+                    <video id="reference-video" class="reference-video" playsinline muted loop preload="auto"></video>
+                    <canvas id="reference-display-canvas" width="960" height="540" aria-label="全身を大きく表示したお手本"></canvas>
+                  </div>
                   <div id="reference-caption" class="reference-caption">動画の骨格の形・動作順序に合わせて動いてください</div>
                 </div>
               </div>
@@ -1280,7 +1286,10 @@
 
           <aside id="form-coach" class="form-coach" aria-label="お手本と動作一致度" hidden>
             <div class="form-coach-head"><span>お手本の動き</span><strong id="coach-score">0%</strong></div>
-            <video id="coach-video" playsinline muted loop preload="auto"></video>
+            <div class="reference-display">
+              <video id="coach-video" playsinline muted loop preload="auto"></video>
+              <canvas id="coach-display-canvas" width="960" height="540" aria-label="全身を大きく表示したお手本"></canvas>
+            </div>
             <div class="form-coach-meter"><i id="coach-meter"></i></div>
           </aside>
 
@@ -2203,6 +2212,59 @@
         const reference = skeletonSimilarity(lm);
         const referenceWeight = selectedInputMode === "mediapipe" ? .30 : .18;
         return { quality: featureQuality * (1 - referenceWeight) + reference * 100 * referenceWeight, reference };
+      }
+
+      // Display-only crop: keep original video and landmark coordinates for scoring.
+      const referenceScan = document.createElement("canvas");
+      referenceScan.width = 320;
+      referenceScan.height = 180;
+      const referenceScanContext = referenceScan.getContext("2d", { willReadFrequently: true });
+      const referenceDisplayBounds = new Map();
+      const referenceDisplayTimes = new WeakMap();
+
+      function findReferenceBounds(pixels, width, height) {
+        let left = width, top = height, right = -1, bottom = -1;
+        for (let y = 0; y < height; y++) {
+          for (let x = 0; x < width; x++) {
+            const i = (y * width + x) * 4;
+            if (Math.max(pixels[i], pixels[i + 1], pixels[i + 2]) < 60) continue;
+            left = Math.min(left, x); right = Math.max(right, x);
+            top = Math.min(top, y); bottom = Math.max(bottom, y);
+          }
+        }
+        return right < left ? null : { left, top, right: right + 1, bottom: bottom + 1 };
+      }
+
+      function drawEnlargedReference(source) {
+        if (source.readyState < 2 || !source.videoWidth) return;
+        const previous = referenceDisplayTimes.get(source);
+        if (previous?.src === source.currentSrc && previous.time === source.currentTime) return;
+        const target = document.querySelector(source === referenceVideo ? "#reference-display-canvas" : "#coach-display-canvas");
+        const display = target.getContext("2d");
+        referenceScanContext.drawImage(source, 0, 0, 320, 180);
+        const frame = findReferenceBounds(referenceScanContext.getImageData(0, 0, 320, 180).data, 320, 180);
+        let bounds = referenceDisplayBounds.get(source.currentSrc);
+        // Accumulate the motion envelope: preserve jumps and wide arm movements,
+        // rather than following/recentering the body on every frame.
+        if (frame) {
+          bounds = bounds ? {
+            left: Math.min(bounds.left, frame.left), top: Math.min(bounds.top, frame.top),
+            right: Math.max(bounds.right, frame.right), bottom: Math.max(bounds.bottom, frame.bottom),
+          } : frame;
+          referenceDisplayBounds.set(source.currentSrc, bounds);
+        }
+        const b = bounds || { left: 0, top: 0, right: 320, bottom: 180 };
+        const pad = Math.max(5, (b.bottom - b.top) * .08);
+        const sx = Math.max(0, b.left - pad) / 320 * source.videoWidth;
+        const sy = Math.max(0, b.top - pad) / 180 * source.videoHeight;
+        const sw = Math.min(320, b.right + pad) / 320 * source.videoWidth - sx;
+        const sh = Math.min(180, b.bottom + pad) / 180 * source.videoHeight - sy;
+        const scale = Math.min(target.width / sw, target.height / sh);
+        display.fillStyle = "#000";
+        display.fillRect(0, 0, target.width, target.height);
+        display.drawImage(source, sx, sy, sw, sh,
+          (target.width - sw * scale) / 2, (target.height - sh * scale) / 2, sw * scale, sh * scale);
+        referenceDisplayTimes.set(source, { src: source.currentSrc, time: source.currentTime });
       }
 
       function setReferenceMotion(kind, caption = "") {
@@ -3611,6 +3673,7 @@
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         const activeReferenceVideo = gameMode === "calibration" || gameMode === "training" ? referenceVideo : coachVideo;
+        drawEnlargedReference(activeReferenceVideo);
         if (referenceLandmarker && activeReferenceVideo.readyState >= 2 && activeReferenceVideo.currentTime !== lastReferenceVideoTime && now - lastReferenceDetectionAt >= 90) {
           lastReferenceVideoTime = activeReferenceVideo.currentTime;
           lastReferenceDetectionAt = now;
