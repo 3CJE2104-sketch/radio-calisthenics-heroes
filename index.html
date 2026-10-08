@@ -716,6 +716,9 @@
 
       .result-card {
         width: min(570px, 100%);
+        max-height: 100%;
+        min-height: 0;
+        overflow-y: auto;
         padding: clamp(26px, 5vw, 44px);
         border: 1px solid rgba(199,255,79,.38);
         border-radius: 26px;
@@ -727,6 +730,9 @@
       .result-card h2 { margin: 8px 0 6px; font-size: clamp(2rem, 6vw, 3.2rem); }
       .result-score { margin: 14px 0 20px; color: var(--lime); font-size: clamp(2.7rem, 9vw, 4.8rem); font-weight: 950; line-height: 1; }
       .result-score small { display: block; margin-bottom: 6px; color: var(--muted); font-size: .7rem; letter-spacing: .18em; }
+      .result-rank { margin: 8px 0; font-size: 1.1rem; font-weight: 800; }
+      .result-rank strong { margin: 0 8px; font-size: 2.6rem; line-height: 1; }
+      .rank-guide { margin: 6px 0 14px; color: var(--muted); font-size: .75rem; line-height: 1.6; }
       .result-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 22px; }
       .result-item { padding: 13px 8px; border: 1px solid rgba(125,190,255,.2); border-radius: 14px; background: rgba(255,255,255,.04); }
       .result-item span { display: block; color: var(--muted); font-size: .72rem; }
@@ -799,6 +805,8 @@
       .form-coach { position: absolute; z-index: 8; right: 18px; bottom: 18px; width: min(250px, 34%); overflow: hidden; border: 2px solid rgba(83, 237, 255, .5); border-radius: 17px; background: rgba(3, 9, 19, .94); box-shadow: 0 16px 44px rgba(0, 0, 0, .52); }
       .form-coach[hidden] { display: none; }
       .form-coach video { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: contain; background: #020710; }
+      /* Zoom only the displayed reference, keeping inference coordinates unchanged. */
+      .reference-video, .form-coach video { transform: scale(2); transform-origin: center; clip-path: inset(25%); }
       .form-coach-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; }
       .form-coach-head span { color: var(--cyan); font-size: .68rem; font-weight: 950; letter-spacing: .08em; }
       .form-coach-head strong { color: var(--lime); font-size: 1rem; }
@@ -1278,6 +1286,9 @@
               <div class="training-progress">BATTLE RESULT</div>
               <h2 id="result-title">3分間、おつかれさま！</h2>
               <div class="result-score"><small>TOTAL SCORE</small><span id="result-score">0000</span></div>
+              <div class="result-rank">ランク <strong id="result-rank">D</strong><span id="result-rank-title"></span></div>
+              <p id="result-rank-next" class="rank-guide"></p>
+              <p id="result-rank-guide" class="rank-guide"></p>
               <div class="result-grid">
                 <div class="result-item"><span>撃破</span><strong id="result-defeats">0</strong></div>
                 <div class="result-item"><span>回避</span><strong id="result-avoids">0</strong></div>
@@ -1410,6 +1421,10 @@
       const resultOverlay = document.querySelector("#result-overlay");
       const resultTitle = document.querySelector("#result-title");
       const resultScore = document.querySelector("#result-score");
+      const resultRank = document.querySelector("#result-rank");
+      const resultRankTitle = document.querySelector("#result-rank-title");
+      const resultRankNext = document.querySelector("#result-rank-next");
+      const resultRankGuide = document.querySelector("#result-rank-guide");
       const resultDefeats = document.querySelector("#result-defeats");
       const resultAvoids = document.querySelector("#result-avoids");
       const resultReflects = document.querySelector("#result-reflects");
@@ -1607,6 +1622,22 @@
       const COOLDOWN_MS = 1150;
       const BEND_THRESHOLD = 0.30;
       const FORM_PASS_SCORE = 65;
+      const DODGE_PASS_SCORE = 55;
+      // Absolute total-score ranks, shared by timed and manually ended battles.
+      const SCORE_RANKS = [
+        { rank: "S", minScore: 5000, title: "伝説のヒーロー！", color: "#ffe16b" },
+        { rank: "A", minScore: 3500, title: "すごうでヒーロー！", color: "#c7ff4f" },
+        { rank: "B", minScore: 2000, title: "頼れるヒーロー！", color: "#56e9ff" },
+        { rank: "C", minScore: 1000, title: "かけだしヒーロー！", color: "#c4b5fd" },
+        { rank: "D", minScore: 0, title: "ヒーローの第一歩！", color: "#d5e1f0" },
+      ];
+      function getScoreRank(totalScore) {
+        return SCORE_RANKS.find(entry => totalScore >= entry.minScore) || SCORE_RANKS[SCORE_RANKS.length - 1];
+      }
+      let twistNeutralSince = null;
+      let twistNeutralCompression = null;
+      let twistMotionSince = null;
+      let twistMotionReady = false;
       const FORM_EXCELLENT_SCORE = 88;
       const OBSTACLE_CHECK_DELAY_MS = 1050;
       const OBSTACLE_TIMEOUT_MS = 5600;
@@ -1787,7 +1818,8 @@
             imuBendThreshold: rounded(imuBendThreshold, 3),
             imuTwistThreshold: rounded(imuTwistThreshold, 3),
           },
-          result: { score, defeats, avoided, reflectedAttacks },
+          result: { score, rank: getScoreRank(score).rank, defeats, avoided, reflectedAttacks },
+          scoreRankCriteria: SCORE_RANKS.map(({ rank, minScore }) => ({ rank, minScore })),
         };
         const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
         const link = document.createElement("a");
@@ -2215,9 +2247,12 @@
       function setFormQuality(value, details) {
         currentFormQuality = Math.round(Math.max(0, Math.min(100, value)));
         const label = `${currentFormQuality}%`;
+        const passingScore = currentReferenceMotion === "diagonal"
+          ? (gameMode === "training" ? 50 : DODGE_PASS_SCORE)
+          : (gameMode === "training" ? 58 : FORM_PASS_SCORE);
         const grade = currentFormQuality >= FORM_EXCELLENT_SCORE
           ? "たいへんよくできました"
-          : currentFormQuality >= FORM_PASS_SCORE ? "合格" : "お手本に合わせよう";
+          : currentFormQuality >= passingScore ? "姿勢点OK" : "お手本に合わせよう";
         formScore.textContent = label;
         coachScore.textContent = label;
         formScoreMeter.style.width = label;
@@ -2247,8 +2282,8 @@
         const wrist = { x: average(lm[15].x, lm[16].x), y: average(lm[15].y, lm[16].y) };
         const targetAnkle = requiredDirection === "right" ? lm[28] : lm[27];
         const directionValue = requiredDirection === "right" ? wrist.x - hipX : hipX - wrist.x;
-        const depth = minimumScore((shoulderY - baselineShoulderY) / torso, 0.30, 0.58);
-        const diagonal = minimumScore(directionValue / Math.max(baselineShoulderWidth, .08), 0.32, 0.75);
+        const depth = minimumScore((shoulderY - baselineShoulderY) / torso, 0.22, 0.44);
+        const diagonal = minimumScore(directionValue / Math.max(baselineShoulderWidth, .08), 0.24, 0.55);
         const handToFoot = clamp01(1 - distance(wrist, targetAnkle) / Math.max(baselineLegLength * 1.2, .20));
         const knees = (minimumScore(jointAngle(lm[23], lm[25], lm[27]), 140, 170) + minimumScore(jointAngle(lm[24], lm[26], lm[28]), 140, 170)) / 2;
         const featureQuality = (depth * .32 + diagonal * .25 + handToFoot * .25 + knees * .18) * 100;
@@ -2259,10 +2294,10 @@
       function computeChestOpenQuality(lm) {
         const torso = Math.max(baselineTorsoLength, .10);
         const shoulderY = average(lm[11].y, lm[12].y);
-        const upright = clamp01(1 - Math.abs(shoulderY - baselineShoulderY) / (torso * .26));
+        const upright = clamp01(1 - Math.abs(shoulderY - baselineShoulderY) / (torso * .38));
         const leftElbow = minimumScore(jointAngle(lm[11], lm[13], lm[15]), 135, 172);
         const rightElbow = minimumScore(jointAngle(lm[12], lm[14], lm[16]), 135, 172);
-        const armSpan = minimumScore(Math.abs(lm[15].x - lm[16].x) / Math.max(baselineShoulderWidth, .08), 1.12, 1.75);
+        const armSpan = minimumScore(Math.abs(lm[15].x - lm[16].x) / Math.max(baselineShoulderWidth, .08), 1.0, 1.45);
         const chestLift = clamp01((baselineShoulderY - shoulderY) / (torso * .18) + .65);
         const featureQuality = (upright * .28 + ((leftElbow + rightElbow) / 2) * .27 + armSpan * .28 + chestLift * .17) * 100;
         const matched = blendWithReference(featureQuality, lm);
@@ -2281,6 +2316,32 @@
         const featureQuality = (rotation * .42 + noSideBend * .23 + hipStable * .20 + elbowExtension * .15) * 100;
         const matched = blendWithReference(featureQuality, lm);
         return { quality: matched.quality, compression, details: `動画骨格 ${Math.round(matched.reference * 100)}・ねじり幅 ${Math.round(rotation * 100)}・横曲げ抑制 ${Math.round(noSideBend * 100)}・腰の安定 ${Math.round(hipStable * 100)}・腕 ${Math.round(elbowExtension * 100)}` };
+      }
+
+      function resetTwistMotion() {
+        twistNeutralSince = null;
+        twistNeutralCompression = null;
+        twistMotionSince = null;
+        twistMotionReady = false;
+      }
+
+      function hasTwistMotion(twist, now) {
+        // Require a front-facing start, then a sustained increase in rotation.
+        if (!twistMotionReady) {
+          if (twist.compression <= 0.08) {
+            if (twistNeutralSince == null) twistNeutralSince = now;
+            if (now - twistNeutralSince >= 120) {
+              twistMotionReady = true;
+              twistNeutralCompression = twist.compression;
+            }
+          } else twistNeutralSince = null;
+          return false;
+        }
+        const rotated = twist.compression >= Math.max(0.18, twistReflectThreshold) &&
+          twist.compression - twistNeutralCompression >= 0.12 && twist.quality >= FORM_PASS_SCORE;
+        if (!rotated) { twistMotionSince = null; return false; }
+        if (twistMotionSince == null) twistMotionSince = now;
+        return now - twistMotionSince >= 120;
       }
 
       function relativeLabel(value) {
@@ -2341,6 +2402,7 @@
       }
 
       function resetCalibration() {
+        resetTwistMotion();
         gameMode = "calibration";
         baselineHipY = null;
         baselineAnkleY = null;
@@ -2620,10 +2682,10 @@
         const downForm = downLeft.quality >= downRight.quality ? downLeft : downRight;
         setFormQuality(downForm.quality, downForm.details);
         maxDiagonalBend = Math.max(maxDiagonalBend, shoulderDrop);
-        if (!diagonalDownSeen && shoulderDrop > 0.22 && diagonalOffset > 0.28 && downForm.quality >= 58) diagonalDownSeen = true;
+        if (!diagonalDownSeen && shoulderDrop > 0.16 && diagonalOffset > 0.20 && downForm.quality >= 50) diagonalDownSeen = true;
 
         if (!diagonalDownSeen) {
-          const progress = Math.min(Math.max(shoulderDrop / 0.22, diagonalOffset / 0.28), 1) * 50;
+          const progress = Math.min(Math.max(shoulderDrop / 0.16, diagonalOffset / 0.20), 1) * 50;
           trainingFill.style.width = `${progress}%`;
           trainingCue.textContent = "両手を片方の足先へ近づける";
           return;
@@ -2631,14 +2693,14 @@
 
         const leftElbow = jointAngle(lm[11], lm[13], lm[15]);
         const rightElbow = jointAngle(lm[12], lm[14], lm[16]);
-        const upright = Math.abs(shoulderY - baselineShoulderY) < torso * 0.22;
-        const armsOpen = leftElbow > 145 && rightElbow > 145 &&
-          Math.abs(lm[15].x - lm[16].x) > baselineShoulderWidth * 1.15;
+        const upright = Math.abs(shoulderY - baselineShoulderY) < torso * 0.32;
+        const armsOpen = leftElbow > 130 && rightElbow > 130 &&
+          Math.abs(lm[15].x - lm[16].x) > baselineShoulderWidth;
         const openForm = computeChestOpenQuality(lm);
         setFormQuality(openForm.quality, openForm.details);
         trainingFill.style.width = `${upright && armsOpen ? 100 : 65}%`;
         trainingCue.textContent = "上体を起こし、ひじを伸ばして胸を開く";
-        if (upright && armsOpen && openForm.quality >= 58) completeTrainingStage();
+        if (upright && armsOpen && openForm.quality >= 50) completeTrainingStage();
       }
 
       function finishTraining() {
@@ -2721,6 +2783,7 @@
       }
 
       function showTutorialStage(stage) {
+        resetTwistMotion();
         tutorialNextButton.hidden = false;
         tutorialNextButton.disabled = false;
         tutorialNextButton.textContent = stage < 2 ? "次へ（できなくても進める）" : "練習を終える（できなくても進める）";
@@ -2787,7 +2850,7 @@
           reflectZone.className = "reflect-zone tutorial-show incoming";
           reflectZone.setAttribute("aria-hidden", "false");
           missionText.textContent = "光る弾には上体ねじり！";
-          setStatus("やってみよう：ねじり反射", "横へ曲げず、後ろを見るように上体を回してください");
+          setStatus("やってみよう：ねじり反射", "まず正面を向いてから、上体を左右どちらかへねじってください");
           playSound("bossWarning", 0.58);
         }
         playSound("dataDisplay", 0.45);
@@ -2849,7 +2912,7 @@
         tutorialIcon.textContent = "🌟";
         tutorialTitle.textContent = tutorialSkippedCount ? "本番へ進もう！" : "3つの動きをマスターしたよ！";
         tutorialDescription.textContent = "両脚跳び、斜め下から胸を開く運動、体のねじりを、お手本に近い形で使い分けます。";
-        tutorialCue.textContent = "本番も一致度65%以上を目指そう！";
+        tutorialCue.textContent = "回避は55点、ジャンプ・ねじりは65点以上を目指そう！";
         tutorialStartButton.hidden = false;
         missionText.textContent = tutorialSkippedCount ? "チュートリアル終了！" : "チュートリアルクリア！";
         setStatus("準備OK！", "「本番スタート！」を押すと3分間のバトルが始まります");
@@ -2889,7 +2952,7 @@
             setFormQuality(down.quality, down.details);
             bendMeter.style.width = `${Math.min(down.quality, 100)}%`;
             bendValue.textContent = `斜め下 ${Math.round(down.quality)}%`;
-            if (down.quality >= FORM_PASS_SCORE && (!imuFresh || imuRecent)) {
+            if (down.quality >= DODGE_PASS_SCORE && (!imuFresh || imuRecent)) {
               diagonalDownQuality = down.quality;
               diagonalDownSeenAt = now;
               tutorialCue.textContent = "次は起き上がって、ひじを伸ばし胸を開く！";
@@ -2900,7 +2963,7 @@
             setFormQuality(combined, `前半 ${Math.round(diagonalDownQuality)}・後半 ${Math.round(open.quality)}｜${open.details}`);
             bendMeter.style.width = `${Math.min(open.quality, 100)}%`;
             bendValue.textContent = `胸を開く ${Math.round(open.quality)}%`;
-            if (open.quality >= FORM_PASS_SCORE && now - diagonalDownSeenAt > 250) completeTutorialStage();
+            if (open.quality >= DODGE_PASS_SCORE && now - diagonalDownSeenAt > 250) completeTutorialStage();
           }
           return;
         }
@@ -2909,7 +2972,8 @@
         setFormQuality(twist.quality, twist.details);
         const imuFresh = selectedInputMode === "sensor" && imuCalibrationReady && now - imuLastReceivedAt <= IMU_STALE_MS;
         const imuRecent = imuFresh && now - imuTwistDetectedAt <= IMU_TWIST_HOLD_MS;
-        const cameraTwist = twist.quality >= FORM_PASS_SCORE;
+        const cameraTwist = hasTwistMotion(twist, now);
+        tutorialCue.textContent = twistMotionReady ? "上体をねじって、少し姿勢を保とう！" : "まず正面を向こう！";
         twistMeter.style.width = `${Math.min(twist.quality, 100)}%`;
         twistValue.textContent = imuFresh
           ? `一致 ${Math.round(twist.quality)}% / IMU ${Math.round(imuGyroSmoothed)}°/s`
@@ -2956,7 +3020,7 @@
 
       function finishBattle(now = performance.now(), reason = "time") {
         if (gameMode !== "battle") return;
-        recordResearchEvent("battle_finish", { reason, score, defeats, avoided, reflectedAttacks });
+        recordResearchEvent("battle_finish", { reason, score, rank: getScoreRank(score).rank, defeats, avoided, reflectedAttacks });
         gameMode = "result";
         hideFormCoach();
         finishBattleButton.hidden = true;
@@ -2975,6 +3039,17 @@
           reason === "manual" ? "ここまでのバトル結果を集計しました" : "3分間のバトル結果を集計しました"
         );
         resultScore.textContent = String(score).padStart(4, "0");
+        const rankEntry = getScoreRank(score);
+        resultRank.textContent = rankEntry.rank;
+        resultRank.style.color = rankEntry.color;
+        resultRankTitle.textContent = rankEntry.title;
+        const nextRank = SCORE_RANKS[SCORE_RANKS.indexOf(rankEntry) - 1];
+        resultRankNext.textContent = nextRank
+          ? `次の${nextRank.rank}ランクまで、あと${(nextRank.minScore - score).toLocaleString("ja-JP")}点！`
+          : "最高ランク達成！";
+        resultRankGuide.textContent = SCORE_RANKS.map(entry => entry.minScore
+          ? `${entry.rank}：${entry.minScore.toLocaleString("ja-JP")}点〜`
+          : "D：0〜999点").join(" ／ ") + "（途中終了も同じ基準）";
         resultDefeats.textContent = String(defeats);
         resultAvoids.textContent = String(avoided);
         resultReflects.textContent = String(reflectedAttacks);
@@ -3050,6 +3125,7 @@
         previousFrameAt = now;
 
         if (!fullBodyVisible(lm)) {
+          resetTwistMotion();
           poseState.textContent = "全身を確認中";
           setStatus("頭から足先まで映してください", "カメラから少し離れると判定しやすくなります");
           return;
@@ -3211,7 +3287,7 @@
             ? `斜め下 ${Math.round(down.quality)}% / IMU ${imuBendAngle.toFixed(0)}°`
             : `斜め下 ${Math.round(down.quality)}%`;
           bendDirectionLabel.textContent = requiredDirection === "right" ? "右足先へ" : "左足先へ";
-          const downOk = down.quality >= FORM_PASS_SCORE && (!imuBendFresh || imuBendRecent);
+          const downOk = down.quality >= DODGE_PASS_SCORE && (!imuBendFresh || imuBendRecent);
           bendFusionState.textContent = downOk ? "前半OK・胸反らしへ" : "斜め下の姿勢を確認中";
           if (elapsed >= OBSTACLE_CHECK_DELAY_MS && downOk) {
             diagonalDownQuality = down.quality;
@@ -3229,8 +3305,8 @@
           bendMeter.style.width = `${Math.min(open.quality, 100)}%`;
           bendValue.textContent = `胸を開く ${Math.round(open.quality)}%`;
           bendDirectionLabel.textContent = "起きて胸を開く";
-          bendFusionState.textContent = open.quality >= FORM_PASS_SCORE ? "連続動作OK" : "胸の開きを確認中";
-          if (open.quality >= FORM_PASS_SCORE && now - diagonalDownSeenAt >= 250) finishObstacle(true, combined);
+          bendFusionState.textContent = open.quality >= DODGE_PASS_SCORE ? "連続動作OK" : "胸の開きを確認中";
+          if (open.quality >= DODGE_PASS_SCORE && now - diagonalDownSeenAt >= 250) finishObstacle(true, combined);
         }
 
         if (elapsed >= OBSTACLE_TIMEOUT_MS && !obstacleResolved) {
@@ -3265,7 +3341,8 @@
         const elapsed = now - bossAttackStartedAt;
         bestTwistQuality = Math.max(bestTwistQuality, twist.quality);
         setFormQuality(twist.quality, twist.details);
-        const cameraTwistDetected = twist.quality >= FORM_PASS_SCORE;
+        const cameraTwistDetected = hasTwistMotion(twist, now);
+        setStatus("体をねじって反射！", twistMotionReady ? "上体を大きくねじり、少し姿勢を保とう" : "まず正面を向いてから、上体をねじろう");
         const validTwist = cameraTwistDetected && (!imuFresh || imuTwistRecent);
         fusionState.textContent = imuFresh
           ? cameraTwistDetected
@@ -3273,15 +3350,16 @@
             : imuTwistRecent ? "IMU OK・姿勢待ち" : "カメラ＋IMU待ち"
           : selectedInputMode === "sensor" ? "MediaPipe代替" : "MediaPipeのみ";
 
-        if (elapsed >= REFLECT_CHECK_DELAY_MS && validTwist) {
-          finishBossAttack(true, twist.quality);
-        } else if (elapsed >= REFLECT_TIMEOUT_MS) {
+        if (elapsed >= REFLECT_TIMEOUT_MS) {
           finishBossAttack(false, bestTwistQuality);
+        } else if (elapsed >= REFLECT_CHECK_DELAY_MS && validTwist) {
+          finishBossAttack(true, twist.quality);
         }
         return true;
       }
 
       function startBossAttack(now) {
+        resetTwistMotion();
         bossAttackActive = true;
         bossAttackResolved = false;
         bossAttackStartedAt = now;
@@ -3562,6 +3640,7 @@
             drawTrainingPreview(lm);
             updateJumpDetector(lm);
           } else {
+            resetTwistMotion();
             drawTrainingPreview();
             poseState.textContent = "未検出";
             if (baselineHipY == null) setStatus("人を探しています", "明るい場所で、カメラの正面に立ってください");
