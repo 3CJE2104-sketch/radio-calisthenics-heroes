@@ -1151,6 +1151,23 @@
       @media (prefers-reduced-motion: reduce) {
         *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
       }
+      .story-city { --sky:#172333; --town:#536170; --window:#697786; --sun:#687586; }
+      .story-city[data-level="1"] { --sky:#263e59; --town:#657c8c; --window:#ffdb76; }
+      .story-city[data-level="2"] { --sky:#305a73; --town:#619690; --window:#ffeaa1; --sun:#ffc779; }
+      .story-city[data-level="3"] { --sky:#568cac; --town:#51aaa0; --window:#fff3b5; --sun:#ffdc76; }
+      .story-city svg { width:100%; max-height:120px; border-radius:12px; background:var(--sky); transition:background 1s; }
+      .story-city .town { fill:var(--town); transition:fill 1s; }
+      .story-city .windows { stroke:var(--window); stroke-width:8; stroke-dasharray:8 12; }
+      .story-city .sun { fill:var(--sun); transition:fill 1s; }
+      .story-city .flowers { opacity:0; }
+      .story-city[data-level="2"] .flowers,.story-city[data-level="3"] .flowers { opacity:1; }
+      .story-city p,.story-note { font-size:.85rem; line-height:1.55; color:#c6d7e9; }
+      .story-city progress { width:100%; accent-color:#c7ff4f; }
+      .story-skill { color:var(--cyan); font-size:.8rem; }
+      #result-story { padding:12px; border-radius:12px; background:#12312d; color:#e4ffd2; }
+      .game-shell[data-city-level="1"] { border-color:#818b64; }
+      .game-shell[data-city-level="2"] { border-color:#69a890; }
+      .game-shell[data-city-level="3"] { border-color:#c7ff4f; box-shadow:0 0 30px #c7ff4f22; }
     </style>
   </head>
   <body>
@@ -1181,7 +1198,7 @@
           </div>
 
           <div id="enemy-zone" class="enemy-zone" aria-label="敵キャラクター">
-            <span class="enemy-label">STOMP TARGET <b id="enemy-number">01</b></span>
+            <span class="enemy-label">カチコチモンスター <b id="enemy-number">01</b></span>
             <div class="enemy"></div>
             <div class="enemy-feet"><i></i><i></i></div>
           </div>
@@ -1192,7 +1209,7 @@
           </div>
 
           <div id="reflect-zone" class="reflect-zone" aria-hidden="true">
-            <span class="reflect-warning">BOSS ATTACK — 体をねじれ！</span>
+            <span class="reflect-warning">魔王の魔法 — 体をねじって返そう！</span>
             <div class="boss-projectile"></div>
             <div class="reflect-ring"></div>
           </div>
@@ -1244,9 +1261,10 @@
 
           <div id="start-overlay" class="start-overlay">
             <div class="start-card">
-              <div class="kicker">MEDIAPIPE MOTION GAME</div>
-              <h2>跳んで、曲げて、<em>戦え。</em></h2>
-              <p>ラジオ体操の「両脚跳び」「斜め下に曲げて胸を反らす」「体をねじる」を、お手本に近いほど高得点で評価します。</p>
+              <div class="kicker">うばわれた朝と、4つの体操の力</div>
+              <h2>体操で、街に<br><em>朝を取り戻そう！</em></h2>
+              <p>カチコチ魔王が、街の元気を奪ってしまった！ 案内役のラジオ「ラジ」と4つの技を覚えて、街を明るくしよう。</p>
+              <p class="story-note">📻 ラジ「大きな力はいらないよ。お手本を見て、無理なく、ていねいに動こう！」</p>
               <div class="mode-picker" role="radiogroup" aria-label="プレイモードを選択">
                 <button type="button" class="mode-option selected" data-input-mode="mediapipe" role="radio" aria-checked="true">
                   <strong>MediaPipeのみ</strong>
@@ -1355,6 +1373,7 @@
             <div class="result-card">
               <div class="training-progress">BATTLE RESULT</div>
               <h2 id="result-title">3分間、おつかれさま！</h2>
+              <p id="result-story" class="story-note"></p>
               <div class="result-score"><small>TOTAL SCORE</small><span id="result-score">0000</span></div>
               <div class="result-rank">ランク <strong id="result-rank">D</strong><span id="result-rank-title"></span></div>
               <p id="result-rank-next" class="rank-guide"></p>
@@ -1374,6 +1393,19 @@
         </div>
 
         <aside class="sidebar">
+          <section id="story-city" class="panel story-city" data-level="0" aria-label="体操で元気を取り戻す街">
+            <h3>📻 ラジと取り戻す、街の朝</h3>
+            <svg viewBox="0 0 320 120" aria-hidden="true">
+              <circle class="sun" cx="267" cy="28" r="18"/>
+              <path class="town" d="M0 110V65H40V40H85V75H115V30H165V58H203V42H242V72H280V50H320V120H0Z"/>
+              <path class="windows" d="M48 58H78 M122 48H156 M122 68H156 M210 60H235 M7 82H34 M287 70H316"/>
+              <path d="M0 112H320" stroke="#76ab79" stroke-width="10"/>
+              <g class="flowers" fill="#ffc8da"><circle cx="34" cy="103" r="5"/><circle cx="185" cy="102" r="5"/><circle cx="262" cy="104" r="5"/></g>
+            </svg>
+            <progress id="story-energy" value="0" max="3000" aria-label="街の元気"></progress>
+            <p id="story-message" aria-live="polite">街はまだ静か。4つの体操の力を集めよう！</p>
+            <div id="story-skill" class="story-skill">身体調整：ヒーロースーツを準備しよう</div>
+          </section>
           <section class="panel">
             <h3>遊び方</h3>
             <div class="steps">
@@ -2848,7 +2880,7 @@
         phaseSkipButton.textContent = "身体調整をスキップして練習へ";
         trainingDots.forEach((dot, index) => dot.className = `training-dot${index === 0 ? " active" : ""}`);
         trainingProgress.textContent = "HERO SCAN 0/3";
-        trainingTitle.textContent = "身体サイズを確認中";
+        trainingTitle.textContent = "ヒーロースーツを調整中";
         trainingDescription.textContent = "正面を向き、頭から足先まで映したまま静止してください。";
         trainingCue.textContent = "まっすぐ立ってください";
         trainingFill.style.width = "0%";
@@ -3149,24 +3181,24 @@
         const stages = [
           {
             icon: "👾",
-            title: "モンスター → 両脚ジャンプ",
+            title: "元気スタンプ！ 両脚ジャンプ",
             description: "両足をそろえて軽くジャンプ。同じ場所に、やさしく着地しよう。",
             cue: "両脚同時・脚をそろえる・体幹まっすぐ",
           },
           {
             icon: "🚧",
-            title: "しましまの壁 → 曲げて、開く",
+            title: "のびのびバリア！ 曲げて、開く",
             description: "右の足先へ体を曲げる → 起き上がる → 腕を広げて胸を開こう。",
             cue: "右足先へ斜め下 → 起きる → 胸を開く",
           },
           {
             icon: "🔮",
-            title: "光る弾 → 上体をねじる",
+            title: "くるっとリフレクト！ 上体をねじる",
             description: "まず正面を向こう。足の位置を動かさず、腕を振って上体をねじろう。横に倒れないようにね。",
             cue: "腕を振る・腰を止める・横へ倒れない",
           },
           {
-            icon: "🌬️", title: "腕と脚を動かして、風の攻撃！",
+            icon: "🌬️", title: "いきいきウインド！ 腕と脚で風を起こす",
             description: "腕を横に振りながら両ひざを軽く曲げ、腕を前で交差して脚を伸ばそう。かかとも腕に合わせて上下。2回続けてね。",
             cue: "横へ振る＋曲げる → 前で交差＋伸ばす。無理に深くしゃがまないでね",
           },
@@ -3363,11 +3395,45 @@
         nextWindAt = now + 14000;
         showFormCoach("jump", "両脚をそろえ、左右同時に跳ぶ");
         missionText.textContent = "正しい両脚跳びで必殺技！";
-        setStatus("バトル開始 — 両脚ジャンプ！", "お手本との一致度65%以上で必殺技が発動します");
+        setStatus("街の元気を集めよう — 両脚ジャンプ！", "3分間の冒険！ お手本に合わせて元気スタンプを使おう");
         playSound("swordDraw", 0.68);
       }
 
+      function storyProgress(points) {
+        const level = points >= 3000 ? 3 : points >= 1500 ? 2 : points >= 500 ? 1 : 0;
+        return { level, message: ["街はまだ静か。4つの体操の力を集めよう！", "街灯がついたよ！ 街にあたたかさが戻ってきた。", "花が咲いたよ！ みんなの元気が戻ってきた。", "街に朝が戻ったよ！ ここからも無理なく動こう！"][level] };
+      }
+
+      let storyViewKey = "";
+      function updateStory() {
+        const action = shell.dataset.action || "";
+        const key = `${gameMode}:${score}:${action}`;
+        if (storyViewKey === key) return;
+        storyViewKey = key;
+        const progress = storyProgress(score);
+        document.querySelector("#story-city").dataset.level = String(progress.level);
+        shell.dataset.cityLevel = String(progress.level);
+        document.querySelector("#story-energy").value = Math.min(score,3000);
+        document.querySelector("#story-message").textContent = progress.message;
+        const skills = {
+          jump:"元気スタンプ ／ 両脚で跳ぶ運動",
+          diagonal:"のびのびバリア ／ 体を斜め下に曲げ胸を反らす運動",
+          twist:"くるっとリフレクト ／ 体をねじる運動",
+          wind:"いきいきウインド ／ 腕を振って脚を曲げ伸ばす運動",
+        };
+        const phases = {
+          top:"📻 ラジ「一緒に街の元気を取り戻そう！」",
+          calibration:"ヒーロースーツを体に合わせています。正面で静止しよう。",
+          training:"スーツの動作確認中。無理のない範囲で練習しよう。",
+          summary:"スーツの準備完了！ 次は4つの技の練習だ。",
+          "tutorial-complete":"準備OK！ 3分間、街の元気を集めよう。",
+          result:"📻 ラジ「力を貸してくれてありがとう！」",
+        };
+        document.querySelector("#story-skill").textContent = phases[gameMode] || skills[action] || "4つの体操の力で街を助けよう！";
+      }
+
       function updateBattleClock(now) {
+        updateStory();
         if (gameMode === "battle") {
           const remaining = battleEndsAt - now;
           if (windActive && now >= windEndsAt) finishWind(now);
@@ -3399,6 +3465,14 @@
         reflectZone.setAttribute("aria-hidden", "true");
         missionText.textContent = "BATTLE FINISHED";
         resultTitle.textContent = reason === "manual" ? "ここまで、おつかれさま！" : "3分間、おつかれさま！";
+        const ending = [
+          "街に小さな希望の灯がともりました。冒険に参加してくれてありがとう！",
+          "きみの体操で街灯がともり、街にあたたかさが戻りました！",
+          "きみの体操で花が咲き、街のみんなが元気になりました！",
+          "カチコチ魔王の雲が晴れ、街に明るい朝が戻りました！",
+        ][storyProgress(score).level];
+        document.querySelector("#result-story").textContent = `📻 ラジ「${ending}」`;
+        updateStory();
         setStatus(
           reason === "manual" ? "バトル終了" : "タイムアップ！",
           reason === "manual" ? "ここまでのバトル結果を集計しました" : "3分間のバトル結果を集計しました"
@@ -3414,7 +3488,7 @@
           : "最高ランク達成！";
         resultRankGuide.textContent = SCORE_RANKS.map(entry => entry.minScore
           ? `${entry.rank}：${entry.minScore.toLocaleString("ja-JP")}点〜`
-          : "D：0〜999点").join(" ／ ") + "（途中終了も同じ基準）";
+          : "D：0〜999点").join(" ／ ") + "（途中終了も同じ基準。ランクはゲーム内の活躍度で、体操の技能を認定するものではありません）";
         resultDefeats.textContent = String(defeats);
         resultAvoids.textContent = String(avoided);
         resultReflects.textContent = String(reflectedAttacks);
