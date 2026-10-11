@@ -813,6 +813,8 @@
       .reference-display { position: relative; aspect-ratio: 16 / 9; background: #000; }
       .reference-display video { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; pointer-events: none; }
       .reference-display canvas { display: block; width: 100%; height: 100%; }
+      .reference-display:has(#wind-guide:not([hidden])) { aspect-ratio: auto; overflow: auto; }
+      #wind-guide a { color: #53edff; }
       .form-coach-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; }
       .form-coach-head span { color: var(--cyan); font-size: .68rem; font-weight: 950; letter-spacing: .08em; }
       .form-coach-head strong { color: var(--lime); font-size: 1rem; }
@@ -1104,6 +1106,48 @@
         .sidebar { grid-template-columns: 1fr; }
       }
 
+/* Tutorial has dedicated regions instead of overlapping floating cards. */
+      .game-shell:has(.tutorial-panel:not([hidden])) .camera-stage { right: 46%; }
+      .game-shell:has(.tutorial-panel:not([hidden])) .hud { right: 46%; }
+      .game-shell:has(.tutorial-panel:not([hidden])) .hud-stats,
+      .game-shell:has(.tutorial-panel:not([hidden])) .mission { display: none; }
+      .game-shell:has(.tutorial-panel:not([hidden])) .enemy-zone { left: 27%; right: auto; transform: translateX(-50%); }
+      .tutorial-panel:not([hidden]) {
+        inset: 10px 10px 10px auto; transform: none; width: calc(46% - 20px);
+        padding: 12px; border-radius: 16px; box-sizing: border-box;
+        display: flex; flex-direction: column; gap: 8px;
+        overflow-y: auto; text-align: left;
+      }
+      .tutorial-heading { justify-content: flex-start; margin: 0; gap: 8px; }
+      .tutorial-heading h2 { font-size: clamp(1rem, 1.6vw, 1.5rem); }
+      .tutorial-icon { font-size: 1.8rem; }
+      .tutorial-description { font-size: clamp(.85rem, 1.05vw, 1rem); margin: 0; line-height: 1.5; }
+      .tutorial-cue { font-size: clamp(.9rem, 1.2vw, 1.1rem); margin: 0; min-height: 2.7em; }
+      .tutorial-progress { margin: 0; }
+      .tutorial-reference-slot { flex: 1 1 auto; min-height: 120px; display: flex; }
+      .tutorial-reference-slot .form-coach { position: relative; inset: auto; width: 100%; box-shadow: none; display: flex; flex-direction: column; }
+      .tutorial-reference-slot .form-coach[hidden] { display: none; }
+      .tutorial-reference-slot .reference-display { flex: 1; min-height: 0; aspect-ratio: auto; }
+      .tutorial-reference-slot canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+      #tutorial-next-button, #tutorial-start-button { flex: 0 0 auto; width: 100%; min-height: 44px; margin: 0; padding: 10px; font-size: .9rem; }
+      #tutorial-next-button:focus-visible, #tutorial-start-button:focus-visible { outline: 3px solid var(--cyan); outline-offset: 2px; }
+      .tutorial-help { margin: 0; font-size: .75rem; color: var(--muted); }
+      @media (max-width: 900px) {
+        .game-shell:has(.tutorial-panel:not([hidden])) { min-height: 760px; aspect-ratio: auto; }
+        .game-shell:has(.tutorial-panel:not([hidden])) .camera-stage { right: 0; bottom: 480px; }
+        .game-shell:has(.tutorial-panel:not([hidden])) .hud { right: 0; bottom: 480px; }
+        .game-shell:has(.tutorial-panel:not([hidden])) .enemy-zone { left: 50%; bottom: 480px; }
+        .tutorial-panel:not([hidden]) { top: auto; bottom: 8px; left: 8px; right: 8px; width: auto; height: 460px; }
+        .tutorial-reference-slot { min-height: 100px; }
+      }
+      .status-panel[data-outcome="success"] { border: 2px solid var(--lime); background: #10251e; }
+      .status-panel[data-outcome="success"] strong { color: var(--lime); }
+      .status-panel[data-outcome="retry"] { border: 2px solid #ffd452; }
+      .status-panel[data-outcome="retry"] strong { color: #ffd452; }
+      .status-panel[data-outcome="tracking"] { border: 2px solid var(--cyan); }
+      .game-shell[data-action="diagonal"] .enemy-zone,
+      .game-shell[data-action="twist"] .enemy-zone { visibility: hidden; }
+      .enemy-zone.defeated { visibility: hidden; }
       @media (prefers-reduced-motion: reduce) {
         *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
       }
@@ -1269,18 +1313,20 @@
             </div>
           </div>
 
-          <section id="tutorial-panel" class="tutorial-panel" aria-live="assertive" hidden>
+          <section id="tutorial-panel" class="tutorial-panel" aria-label="動きを練習する" hidden>
             <div id="tutorial-badge" class="tutorial-badge">あそびかた 1/3</div>
             <div class="tutorial-heading">
               <span id="tutorial-icon" class="tutorial-icon" aria-hidden="true">👾</span>
               <h2 id="tutorial-title">モンスターを踏みつぶそう！</h2>
             </div>
             <p id="tutorial-description" class="tutorial-description">紫のモンスターが足元に出たら、両脚をそろえてジャンプします。</p>
-            <div id="tutorial-cue" class="tutorial-cue">両脚でジャンプ → 着地！</div>
+            <div id="tutorial-reference-slot" class="tutorial-reference-slot"></div>
+            <div id="tutorial-cue" class="tutorial-cue" role="status" aria-live="polite">両脚でジャンプ → 着地！</div>
             <div id="tutorial-progress" class="tutorial-progress" aria-label="チュートリアルの進み具合">
-              <span class="active"></span><span></span><span></span>
+              <span class="active"></span><span></span><span></span><span></span>
             </div>
             <button id="tutorial-next-button" class="secondary-button" type="button">次へ（できなくても進める）</button>
+            <p class="tutorial-help">できなくても大丈夫。次へ進めます。無理せず動こう。</p>
             <button id="tutorial-start-button" class="primary-button tutorial-start" type="button" hidden>本番スタート！</button>
           </section>
 
@@ -1289,6 +1335,18 @@
             <div class="reference-display">
               <video id="coach-video" playsinline muted loop preload="auto"></video>
               <canvas id="coach-display-canvas" width="960" height="540" aria-label="全身を大きく表示したお手本"></canvas>
+              <div id="wind-guide" hidden style="padding:16px;text-align:center;color:#eaffff;background:#071422">
+                <strong>腕を振って脚を曲げ伸ばす運動</strong>
+                <svg viewBox="0 0 400 210" role="img" aria-label="腕を横へ振り脚を曲げる、腕を前で交差して脚を伸ばす、を繰り返す説明図" style="width:100%;max-height:250px">
+                  <g stroke="#53edff" stroke-width="7" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="95" cy="34" r="13"/><path d="M95 50V108 M95 62L53 76L20 68 M95 62L137 76L170 68 M95 108L65 137L79 171 M95 108L125 137L111 171"/>
+                    <circle cx="300" cy="23" r="13"/><path d="M300 39V104 M300 51L275 82L316 103 M300 51L325 82L284 103 M300 104L289 168 M300 104L311 168"/>
+                  </g><g fill="#ceff58" font-size="15" text-anchor="middle"><text x="95" y="199">横へ振る＋脚を曲げる</text><text x="300" y="199">前で交差＋脚を伸ばす</text><text x="200" y="95">→</text></g>
+                </svg>
+                <p style="margin:4px">かかとも腕に合わせて上下。無理に深くしゃがまず、同じリズムで2回！</p>
+                <small>動きの説明図（動画一致度ではなく動作を評価）</small>
+                <div><a href="https://www.jp-life.japanpost.jp/radio/instruction/radio_first.html" target="_blank" rel="noopener noreferrer">公式の説明：ラジオ体操第一・2番</a></div>
+              </div>
             </div>
             <div class="form-coach-meter"><i id="coach-meter"></i></div>
           </aside>
@@ -1305,6 +1363,7 @@
                 <div class="result-item"><span>撃破</span><strong id="result-defeats">0</strong></div>
                 <div class="result-item"><span>回避</span><strong id="result-avoids">0</strong></div>
                 <div class="result-item"><span>反射</span><strong id="result-reflects">0</strong></div>
+                <div class="result-item"><span>風の攻撃</span><strong id="result-wind">0</strong></div>
               </div>
               <button id="research-download-button" class="secondary-button research-download" type="button" hidden>研究データをもう一度保存</button>
               <p id="research-save-note" class="research-save-note" hidden>同意した研究データを、このPCにJSON形式で保存しました。</p>
@@ -1320,10 +1379,11 @@
             <div class="steps">
               <div class="step"><span class="step-number">1</span><div><strong>全身を映す</strong><span>頭から足先までカメラに入る位置へ移動します。</span></div></div>
               <div class="step"><span class="step-number">2</span><div><strong>ヒーロースキャン</strong><span>ねじる・両脚跳び・斜め下から胸を開く、の3種目で個人調整します。</span></div></div>
-              <div class="step"><span class="step-number">3</span><div><strong>チュートリアル</strong><span>3種類の障害物を実際に動いて対処し、遊び方を覚えます。</span></div></div>
+              <div class="step"><span class="step-number">3</span><div><strong>チュートリアル</strong><span>4種類の動きを実際に試し、遊び方を覚えます。</span></div></div>
               <div class="step"><span class="step-number">4</span><div><strong>ジャンプで攻撃</strong><span>測定した跳び幅に合わせて必殺技が発動します。</span></div></div>
               <div class="step"><span class="step-number">5</span><div><strong>斜め下＋胸反らしで回避</strong><span>片足先へ斜め下に曲げ、起き上がって胸を大きく開きます。</span></div></div>
               <div class="step"><span class="step-number">6</span><div><strong>ねじって反射</strong><span>ボスの弾が接近したら、脚を動かさず上体を大きくねじります。</span></div></div>
+              <div class="step"><span class="step-number">7</span><div><strong>腕振り＋脚の曲げ伸ばしで風</strong><span>案内が出たら、腕を横へ振ってひざを軽く曲げ、前で交差して伸ばします。2回連動させて動作評価65点以上で攻撃！ この種目は両モードともカメラで評価します。</span></div></div>
             </div>
           </section>
 
@@ -1494,6 +1554,7 @@
         twist: "assets/reference/twist.mp4",
         jump: "assets/reference/jump.mp4",
         diagonal: "assets/reference/diagonal-bend.mp4",
+        wind: "assets/reference/arm-swing.mp4",
       };
 
       const soundFiles = {
@@ -1703,12 +1764,13 @@
         const exercises = {
           diagonal: "体を斜め下に曲げ胸を反らす運動",
           jump: "両脚で跳ぶ運動", twist: "体をねじる運動",
+          wind: "腕を振って脚を曲げ伸ばす運動",
           calibration: "身体調整（正面で静止）", none: "運動の指示なし",
         };
         let exerciseId = "none";
         if (gameMode === "calibration") exerciseId = "calibration";
         if (gameMode === "training") exerciseId = ["twist", "jump", "diagonal"][trainingStage];
-        if (gameMode === "tutorial") exerciseId = ["jump", "diagonal", "twist"][tutorialStage];
+        if (gameMode === "tutorial") exerciseId = ["jump", "diagonal", "twist", "wind"][tutorialStage];
         if (gameMode === "battle") exerciseId = currentReferenceMotion || "none";
         return {
           phaseName: phaseNames[gameMode] || gameMode,
@@ -1830,7 +1892,7 @@
             imuBendThreshold: rounded(imuBendThreshold, 3),
             imuTwistThreshold: rounded(imuTwistThreshold, 3),
           },
-          result: { score, rank: getScoreRank(score).rank, defeats, avoided, reflectedAttacks },
+          result: { score, rank: getScoreRank(score).rank, defeats, avoided, reflectedAttacks, windAttacks },
           scoreRankCriteria: SCORE_RANKS.map(({ rank, minScore }) => ({ rank, minScore })),
         };
         const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
@@ -2042,7 +2104,19 @@
         }
       }
 
+      let feedbackEpoch = 0;
+      let actionTrackingLost = false;
+      function announceOutcome(kind, title, detail) {
+        setStatus(title, detail);
+        statusTitle.closest(".status-panel").dataset.outcome = kind;
+      }
+      function nextJumpPrompt() {
+        shell.dataset.action = "jump";
+        missionText.textContent = "次は：両脚ジャンプでモンスターを倒そう";
+        setStatus("次は、両脚ジャンプ！", "両足を床につけて準備 → 軽く跳ぶ → 同じ場所に着地");
+      }
       function setStatus(title, detail) {
+        statusTitle.closest(".status-panel").dataset.outcome = "instruction";
         statusTitle.textContent = title;
         statusDetail.textContent = detail;
       }
@@ -2268,6 +2342,10 @@
       }
 
       function setReferenceMotion(kind, caption = "") {
+        const wind = kind === "wind";
+        document.querySelector("#wind-guide").hidden = true;
+        document.querySelector("#coach-display-canvas").style.display = "";
+        formCoach.querySelector(".form-coach-head span").textContent = wind ? "風の攻撃：動作評価" : "お手本の動き";
         const src = referenceClips[kind];
         if (!src) return;
         currentReferenceMotion = kind;
@@ -2300,10 +2378,14 @@
       }
 
       function showFormCoach(kind, label) {
+        const slot = document.querySelector("#tutorial-reference-slot");
+        if (!formCoachHome) formCoachHome = formCoach.parentElement;
+        (tutorialPanel.hidden ? formCoachHome : slot).appendChild(formCoach);
         setReferenceMotion(kind, label);
         formCoach.hidden = false;
       }
 
+      let formCoachHome = null;
       function hideFormCoach() {
         formCoach.hidden = true;
         coachVideo.pause();
@@ -2319,16 +2401,209 @@
           ? "たいへんよくできました"
           : currentFormQuality >= passingScore ? "姿勢点OK" : "お手本に合わせよう";
         formScore.textContent = label;
-        coachScore.textContent = label;
+        coachScore.textContent = currentReferenceMotion === "wind" ? `${currentFormQuality}点` : label;
         formScoreMeter.style.width = label;
         coachMeter.style.width = label;
         qualityBreakdown.textContent = `${grade}｜${details}`;
       }
 
-      function computeJumpQuality(lm, hipRise) {
+      // Game-specific heuristics inspired by Radio Taiso #2, not an official scoring rubric.
+      // Samples are normalized by body size. A complete open/bend -> close/extend cycle is required.
+      function createWindTracker() {
+        let s;
+        const reset = () => { s = { phase: "ready", since: null, last: null, cycles: [], peak: null, started: 0 }; };
+        reset();
+        return { reset, update(p) {
+          if (!p.valid || (s.last !== null && p.now - s.last > 250)) { reset(); if (!p.valid) return { hint: "手首・ひざ・足先まで映してください", quality: 0 }; }
+          s.last = p.now;
+          const standing = p.bend < 14 && p.spread < .8 && p.upright > .65;
+          const opened = p.bend >= 18 && p.bend <= 65 && p.spread >= 1.65 && p.upright > .65 && p.symmetry > .55;
+          const held = condition => {
+            if (!condition) { s.since = null; return false; }
+            if (s.since === null) s.since = p.now;
+            return p.now - s.since >= 100;
+          };
+          let hint = "腕を前で交差して、脚を伸ばそう";
+          if (s.phase === "ready" && held(standing)) {
+            s.phase = "open"; s.since = null; s.started = p.now;
+          } else if (s.phase === "open") {
+            hint = "腕を横へ振るのに合わせて、両ひざを軽く曲げよう";
+            if (held(opened)) {
+              s.peak = { ...p }; s.phase = "close"; s.since = null;
+            }
+          } else if (s.phase === "close") {
+            hint = "腕を前で交差して、脚を伸ばそう。かかともリズムよく！";
+            if (held(standing)) {
+              const duration = p.now - s.started;
+              if (duration >= 450 && duration <= 5000) {
+                const peak = s.peak;
+                const arm = Math.min(1, (peak.spread - p.spread) / 1.6);
+                const legs = Math.min(1, (peak.bend - p.bend) / 28);
+                const rhythm = s.cycles.length ? Math.min(duration, s.cycles[0].duration) / Math.max(duration, s.cycles[0].duration) : 1;
+                // Heel motion is only an optional 10-point component: front-view depth is uncertain.
+                const heelVisible = peak.heel !== null && p.heel !== null;
+                const heel = heelVisible ? Math.min(1, Math.abs(peak.heel - p.heel) / .035) : 0;
+                const parts = { arms: arm*25, legs: legs*25, symmetry: Math.min(peak.symmetry,p.symmetry)*15,
+                  posture: Math.min(peak.upright,p.upright)*15, rhythm: rhythm*10, heels: heel*10 };
+                const featureQuality = Object.values(parts).reduce((a,b)=>a+b,0);
+                const referenceQuality = Number.isFinite(peak.reference) && Number.isFinite(p.reference)
+                  ? (peak.reference+p.reference)*50 : null;
+                const quality = referenceQuality === null ? featureQuality : featureQuality*.8+referenceQuality*.2;
+                s.cycles.push({ duration, quality, featureQuality, referenceQuality, parts, heelVisible });
+                if (s.cycles.length === 2) {
+                  const quality = s.cycles.reduce((a,c)=>a+c.quality,0)/2;
+                  const cycles = s.cycles; reset();
+                  return { completed: true, quality, cycles, hint: quality >= 65 ? "腕と脚が連動したよ！" : "腕と脚を一緒に、同じリズムでもう一度" };
+                }
+              } else s.cycles = [];
+              s.phase = "open"; s.started = p.now; s.since = null;
+            }
+          }
+          if (s.phase !== "ready" && p.now-s.started > 5000) { reset(); hint = "いったん脚を伸ばして、もう一度始めよう"; }
+          return { quality: s.cycles[0]?.quality || 0, hint: `${s.cycles.length}/2回：${hint}` };
+        } };
+      }
+
+      const windTracker = createWindTracker();
+      let windActive = false, windEndsAt = Infinity, nextWindAt = Infinity, windAttacks = 0;
+      function sampleWind(lm, now) {
+        const required = [11,12,15,16,23,24,25,26,27,28];
+        const valid = required.every(i => lm[i] && (lm[i].visibility ?? 0) > .6);
+        if (!valid) return windTracker.update({ now, valid: false });
+        const torso = Math.max(.04, distance(lm[11],lm[23]),distance(lm[12],lm[24]));
+        const width = Math.max(.04, Math.abs(lm[11].x-lm[12].x));
+        const left = 180-jointAngle(lm[23],lm[25],lm[27]);
+        const right = 180-jointAngle(lm[24],lm[26],lm[28]);
+        const upright = Math.max(0,1-Math.abs(average(lm[11].x,lm[12].x)-average(lm[23].x,lm[24].x))/torso*2);
+        const heelsVisible = [29,30,31,32].every(i => lm[i] && (lm[i].visibility ?? 0)>.7);
+        return windTracker.update({ now, valid, bend: average(left,right), spread: Math.abs(lm[15].x-lm[16].x)/width,
+          reference: latestReferenceLandmarks && now-lastReferenceDetectionAt<300 ? skeletonSimilarity(lm) : null,
+          symmetry: Math.max(0,1-Math.abs(left-right)/35), upright,
+          heel: heelsVisible ? (average(lm[31].y,lm[32].y)-average(lm[29].y,lm[30].y))/torso : null });
+      }
+
+      function startWind(now) {
+        windTracker.reset(); windActive = true; windEndsAt = now+16000;
+        resetStableJump(); shell.dataset.action = "wind";
+        showFormCoach("wind", "腕と脚を連動させて2回、風の攻撃！");
+        missionText.textContent = "腕振り＋脚の曲げ伸ばし → 風の攻撃！";
+        setStatus("風を起こそう！", "腕を横へ＋ひざを曲げる → 腕を前で交差＋脚を伸ばす。2回続けよう");
+        recordResearchEvent("wind_start", { evaluation: "camera_rules_with_reference_when_available", durationMs: 16000 });
+      }
+
+      function windEffect() {
+        playSound("dodgeWhoosh", .75);
+        const effect = document.createElement("div");
+        effect.textContent = "🌬️  ≋≋≋";
+        Object.assign(effect.style, { position:"absolute", left:"8%", top:"55%", zIndex:15, color:"#53edff", fontSize:"clamp(36px,8vw,110px)", pointerEvents:"none" });
+        shell.appendChild(effect);
+        const animation = effect.animate([{transform:"translateX(0)",opacity:1},{transform:"translateX(600px)",opacity:0}],{duration:1000});
+        animation.onfinish = () => effect.remove();
+      }
+
+      function finishWind(now, result = null) {
+        if (!windActive) return;
+        windActive = false; windTracker.reset();
+        const success = result?.completed && result.quality >= 65;
+        const gained = success ? Math.round(80+result.quality*1.2) : 0;
+        if (success) { windAttacks++; score += gained; scoreLabel.textContent=String(score).padStart(4,"0"); windEffect(); enemyZone.classList.add("boss-hit"); }
+        recordResearchEvent("wind_finish", { success, gained, quality: result?.quality ?? null, cycles: result?.cycles ?? [], evaluation:"camera_rules_with_reference_when_available" });
+        announceOutcome(success ? "success" : "failure", success ? `風の攻撃！ ＋${gained}点` : "風の練習はここまで", "次は：両脚ジャンプ！");
+        nextWindAt=now+22000; nextObstacleAt=Math.max(nextObstacleAt,now+5500); nextBossAttackAt=Math.max(nextBossAttackAt,now+8500);
+        enemyReady=false;
+        const epoch=feedbackEpoch;
+        window.setTimeout(()=>{
+          if(gameMode!=="battle" || epoch!==feedbackEpoch)return;
+          enemyZone.classList.remove("boss-hit"); enemyReady=true;
+          showFormCoach("jump","両脚をそろえ、左右同時に跳ぶ"); nextJumpPrompt(); resetStableJump();
+        },1600);
+      }
+
+      function updateWind(lm, now) {
+        const result=sampleWind(lm,now);
+        const parts = result.cycles ? Object.keys(result.cycles[0].parts).map((key,i) =>
+          `${["腕","脚","左右差","姿勢","リズム","かかと"][i]} ${Math.round(result.cycles.reduce((sum,c)=>sum+c.parts[key],0)/2)}`).join("・") : "腕・脚・左右差・姿勢・リズムを評価";
+        const comparison = result.cycles ? result.cycles.map(c => c.referenceQuality === null ? "動画未取得：動作点のみ" : `動画一致 ${Math.round(c.referenceQuality)}点`).join(" / ") : "動作80%＋動画20%（動画取得時）";
+        setFormQuality(result.quality, `${parts}｜${comparison}。${result.hint}`);
+        if(gameMode==="tutorial") tutorialCue.textContent=result.hint;
+        else setStatus("風の攻撃にチャレンジ", result.hint);
+        if(result.completed){
+          recordResearchEvent("wind_cycle_pair",result);
+          if(result.quality>=65){
+            if(gameMode==="tutorial")completeTutorialStage();
+            else finishWind(now,result);
+          }
+        }
+      }
+
+      function createJumpTracker() {
+        let s;
+        const reset = () => { s = { last: null, ground: [], ready: false, air: false, hits: [], up: -Infinity, quality: 0, land: null }; };
+        reset();
+        return { reset, update(p) {
+          if (s.last && p.now-s.last.now > 250) reset();
+          const old = s.last; s.last = p;
+          const h = Math.max(.012, Math.min(p.hipThreshold, p.leg*.10));
+          const f = Math.max(.006, Math.min(p.footThreshold, p.leg*.035));
+          if (!s.ready) {
+            if (!p.standing || (old && Math.max(Math.abs(p.hip-old.hip), Math.abs(p.left-old.left), Math.abs(p.right-old.right)) > p.leg*.025)) s.ground = [];
+            else s.ground.push(p);
+            s.ground = s.ground.filter(q => p.now-q.now <= 350);
+            if (s.ground.length >= 3 && p.now-s.ground[0].now >= 180) {
+              const mean = k => s.ground.reduce((v,q) => v+q[k],0)/s.ground.length;
+              s.base = { hip: mean("hip"), left: mean("left"), right: mean("right") }; s.ready = true;
+            }
+            return { detected: false, landed: false, quality: 0, hint: "両足を床につけて、まっすぐ立とう" };
+          }
+          const rise = s.base.hip-p.hip, l = s.base.left-p.left, r = s.base.right-p.right;
+          if (old && (old.hip-p.hip)/Math.max(p.now-old.now,1) > p.leg*.00004) s.up = p.now;
+          const form = p.quality(rise,s.base);
+          const both = l >= f && r >= f && Math.abs(l-r) <= Math.max(p.leg*.12,.018);
+          s.hits = s.hits.filter(q => p.now-q.now <= 180);
+          if (!s.air && rise >= h && both && p.now-s.up <= 250 && form.quality >= p.pass) s.hits.push({now:p.now,quality:form.quality});
+          if (!s.air && s.hits.length >= 2 && s.hits.at(-1).now-s.hits[0].now >= 20) {
+            s.air = true; s.start = p.now; s.quality = Math.max(...s.hits.map(q => q.quality));
+          }
+          const ground = Math.abs(rise) <= h*.55 && Math.abs(l) <= f*.8 && Math.abs(r) <= f*.8;
+          if (s.air && ground) s.land ??= p.now; else s.land = null;
+          const landed = s.air && s.land !== null && p.now-s.land >= 80;
+          const expired = s.air && p.now-s.start > 1800;
+          const result = { detected:s.air && !expired, landed:landed && !expired, quality:s.quality, rise, form,
+            hint:s.air ? "同じ場所へやさしく着地しよう" : rise<h ? "両足をそろえて軽く跳ぼう" : !both ? "左右の足を同時に上げよう" : "体をまっすぐにして、両脚をそろえよう" };
+          if (landed || expired) reset();
+          return result;
+        }};
+      }
+      const stableJumpTracker = createJumpTracker();
+      let stableJumpContext = "";
+      function resetStableJump() {
+        stableJumpTracker.reset();
+        cameraJumpDetectedAt = -Infinity;
+        pendingJumpQuality = 0;
+        airborne = attackArmed = tutorialAirborne = trainingAirborne = false;
+      }
+      function sampleStableJump(lm, now, pass = FORM_PASS_SCORE) {
+        const hip = average(lm[23].y,lm[24].y);
+        const result = stableJumpTracker.update({
+          now, hip, left:lm[27].y, right:lm[28].y, leg:Math.max(baselineLegLength,.12),
+          hipThreshold:jumpHipThreshold, footThreshold:jumpAnkleThreshold, pass,
+          standing:average(lm[27].y,lm[28].y)-hip >= (baselineAnkleY-baselineHipY)*.85,
+          quality:(rise,base) => computeJumpQuality(lm,rise,base)
+        });
+        if (result.form) setFormQuality(result.form.quality,result.form.details);
+        // An interrupted/expired motion must never leave an armed attack behind.
+        if (!result.detected) {
+          airborne = attackArmed = tutorialAirborne = false;
+          cameraJumpDetectedAt = -Infinity;
+          pendingJumpQuality = 0;
+        }
+        jumpFusionState.textContent = result.hint;
+        return result;
+      }
+      function computeJumpQuality(lm, hipRise, ground = null) {
         const leg = Math.max(baselineLegLength, 0.16);
-        const leftRise = (baselineLeftAnkleY ?? baselineAnkleY) - lm[27].y;
-        const rightRise = (baselineRightAnkleY ?? baselineAnkleY) - lm[28].y;
+        const leftRise = (ground?.left ?? baselineLeftAnkleY ?? baselineAnkleY) - lm[27].y;
+        const rightRise = (ground?.right ?? baselineRightAnkleY ?? baselineAnkleY) - lm[28].y;
         const height = minimumScore(hipRise / leg, 0.08, 0.15);
         const bothFeet = clamp01(1 - Math.abs(leftRise - rightRise) / Math.max(leg * 0.10, 0.018));
         const feetTogether = clamp01(1 - Math.abs(lm[27].x - lm[28].x) / Math.max(baselineShoulderWidth * 0.95, 0.10));
@@ -2421,6 +2696,11 @@
       }
 
       function resetGameProgress() {
+        windTracker.reset(); windActive=false; nextWindAt=Infinity; windAttacks=0;
+        feedbackEpoch += 1;
+        actionTrackingLost = false;
+        delete shell.dataset.action;
+        resetStableJump();
         score = 0;
         defeats = 0;
         avoided = 0;
@@ -2467,6 +2747,7 @@
       }
 
       function resetCalibration() {
+        resetStableJump();
         resetTwistMotion();
         gameMode = "calibration";
         baselineHipY = null;
@@ -2723,17 +3004,16 @@
         if (trainingStage === 1) {
           const hipRise = baselineHipY - hipY;
           const ankleRise = baselineAnkleY - ankleY;
-          const jumpForm = computeJumpQuality(lm, hipRise);
-          setFormQuality(jumpForm.quality, jumpForm.details);
-          maxTrainingHipRise = Math.max(maxTrainingHipRise, hipRise);
-          if (!trainingAirborne && hipRise > 0.035 && ankleRise > 0.012 && jumpForm.quality >= 58) trainingAirborne = true;
-          if (trainingAirborne && Math.abs(hipRise) < 0.018) {
+          const jump = sampleStableJump(lm, performance.now(), 58);
+          if (jump.detected) maxTrainingHipRise = Math.max(maxTrainingHipRise, jump.rise);
+          trainingAirborne = jump.detected;
+          if (jump.landed) {
             trainingAirborne = false;
             trainingJumpCount += 1;
           }
           const activeJump = trainingAirborne ? Math.min(hipRise / 0.05, 1) : 0;
           trainingFill.style.width = `${Math.min((trainingJumpCount + activeJump) / 2, 1) * 100}%`;
-          trainingCue.textContent = `${Math.min(trainingJumpCount, 2)}/2回　両脚をそろえて軽くジャンプ`;
+          trainingCue.textContent = `${Math.min(trainingJumpCount, 2)}/2回　${jump.hint}`;
           if (trainingJumpCount >= 2) completeTrainingStage();
           return;
         }
@@ -2813,7 +3093,7 @@
           ? `カメラ ${Math.round(maxDiagonalBend * 100)}% / IMU ${maxTrainingBendAngle.toFixed(0)}°→${imuBendThreshold.toFixed(0)}°`
           : `${Math.round(maxDiagonalBend * 100)}%（カメラ）`;
         calibrationState.textContent = usedStandardSettings ? "標準設定を使用" : "個人調整済み";
-        setStatus("ヒーロースキャン完了", "「チュートリアルへ」を押して、3つの必殺アクションを練習しましょう");
+        setStatus("ヒーロースキャン完了", "「チュートリアルへ」を押して、4つのアクションを練習しましょう");
         playSound("impactText", 0.6);
       }
 
@@ -2836,6 +3116,7 @@
       }
 
       function clearTutorialObjects() {
+        windTracker.reset(); windActive=false;
         enemyZone.className = "enemy-zone";
         obstacleZone.className = "obstacle-zone";
         obstacleZone.setAttribute("aria-hidden", "true");
@@ -2851,7 +3132,7 @@
         resetTwistMotion();
         tutorialNextButton.hidden = false;
         tutorialNextButton.disabled = false;
-        tutorialNextButton.textContent = stage < 2 ? "次へ（できなくても進める）" : "練習を終える（できなくても進める）";
+        tutorialNextButton.textContent = stage < 3 ? "次へ（できなくても進める）" : "練習を終える（できなくても進める）";
         tutorialStage = stage;
         tutorialLocked = false;
         tutorialAirborne = false;
@@ -2868,25 +3149,31 @@
         const stages = [
           {
             icon: "👾",
-            title: "両脚で跳ぶ運動で必殺技！",
-            description: "お手本のように両脚をそろえ、左右の足を同時に上げます。体を傾けず、同じ場所へやさしく着地しましょう。",
+            title: "モンスター → 両脚ジャンプ",
+            description: "両足をそろえて軽くジャンプ。同じ場所に、やさしく着地しよう。",
             cue: "両脚同時・脚をそろえる・体幹まっすぐ",
           },
           {
             icon: "🚧",
-            title: "斜め下に曲げ、胸を反らして回避！",
-            description: "お手本の順序で、右足先へ斜め下に曲げてから起き上がり、ひじを伸ばして胸を大きく開きます。",
+            title: "しましまの壁 → 曲げて、開く",
+            description: "右の足先へ体を曲げる → 起き上がる → 腕を広げて胸を開こう。",
             cue: "右足先へ斜め下 → 起きる → 胸を開く",
           },
           {
             icon: "🔮",
-            title: "ボスの弾を跳ね返そう！",
-            description: "腕を伸ばして振り、脚と腰の位置を保ったまま上体を大きくねじります。横へ倒れる動きは減点です。",
+            title: "光る弾 → 上体をねじる",
+            description: "まず正面を向こう。足の位置を動かさず、腕を振って上体をねじろう。横に倒れないようにね。",
             cue: "腕を振る・腰を止める・横へ倒れない",
+          },
+          {
+            icon: "🌬️", title: "腕と脚を動かして、風の攻撃！",
+            description: "腕を横に振りながら両ひざを軽く曲げ、腕を前で交差して脚を伸ばそう。かかとも腕に合わせて上下。2回続けてね。",
+            cue: "横へ振る＋曲げる → 前で交差＋伸ばす。無理に深くしゃがまないでね",
           },
         ];
         const item = stages[stage];
-        tutorialBadge.textContent = `あそびかた ${stage + 1}/3`;
+        shell.dataset.action = ["jump", "diagonal", "twist", "wind"][stage];
+        tutorialBadge.textContent = `あそびかた ${stage + 1}/4`;
         tutorialIcon.textContent = item.icon;
         tutorialTitle.textContent = item.title;
         tutorialDescription.textContent = item.description;
@@ -2909,7 +3196,7 @@
           missionText.textContent = "斜め下＋胸反らしで回避！";
           setStatus("やってみよう：斜め下＋胸反らし", "右足先へ曲げたあと、起き上がって胸を開いてください");
           playSound("obstacleWarning", 0.58);
-        } else {
+        } else if (stage === 2) {
           showFormCoach("twist", "腕を伸ばし、腰を動かさず上体をねじる");
           bossAttackActive = true;
           reflectZone.className = "reflect-zone tutorial-show incoming";
@@ -2917,6 +3204,10 @@
           missionText.textContent = "光る弾には上体ねじり！";
           setStatus("やってみよう：ねじり反射", "まず正面を向いてから、上体を左右どちらかへねじってください");
           playSound("bossWarning", 0.58);
+        } else {
+          showFormCoach("wind", "腕と脚を連動させて2回！");
+          missionText.textContent="腕振り＋脚の曲げ伸ばしで風の攻撃！";
+          setStatus("やってみよう：風の攻撃", item.cue);
         }
         playSound("dataDisplay", 0.45);
       }
@@ -2925,11 +3216,13 @@
         if (tutorialLocked) return;
         tutorialLocked = true;
         tutorialNextButton.disabled = true;
-        recordResearchEvent("tutorial_stage_success", { stage: tutorialStage + 1, action: ["jump", "diagonal_bend_chest_open", "twist"][tutorialStage], quality: currentFormQuality });
+        recordResearchEvent("tutorial_stage_success", { stage: tutorialStage + 1, action: ["jump", "diagonal_bend_chest_open", "twist", "wind"][tutorialStage], quality: currentFormQuality });
         tutorialDots[tutorialStage].className = "done";
         tutorialTitle.textContent = "できた！ 大成功！";
-        tutorialCue.textContent = [`両脚跳び ${currentFormQuality}%！`, `斜め下＋胸反らし ${currentFormQuality}%！`, `体のねじり ${currentFormQuality}%！`][tutorialStage];
-        setStatus("チュートリアル成功！", tutorialCue.textContent);
+        tutorialCue.textContent = [`両脚跳び ${currentFormQuality}%！`, `斜め下＋胸反らし ${currentFormQuality}%！`, `体のねじり ${currentFormQuality}%！`, `風の動作評価 ${currentFormQuality}点！`][tutorialStage];
+        const nextHint = ["次は：斜め下に曲げて、胸を開く", "次は：上体をねじって弾を返す", "次は：腕と脚を動かして風の攻撃", "次は：本番スタート！"][tutorialStage];
+        tutorialDescription.textContent = nextHint;
+        announceOutcome("success", "練習成功！", nextHint);
         playSound("confirmPrimary", 0.72);
 
         if (tutorialStage === 0) {
@@ -2939,15 +3232,17 @@
         } else if (tutorialStage === 1) {
           obstacleZone.classList.add("avoided");
           playSound("dodgeWhoosh", 0.7);
-        } else {
+        } else if (tutorialStage === 2) {
           reflectZone.className = "reflect-zone incoming reflected";
           enemyZone.classList.add("boss-hit");
           playSound("reflect", 0.78);
+        } else {
+          windEffect(); enemyZone.classList.add("boss-hit");
         }
 
         window.setTimeout(() => {
           if (gameMode !== "tutorial") return;
-          if (tutorialStage < 2) showTutorialStage(tutorialStage + 1);
+          if (tutorialStage < 3) showTutorialStage(tutorialStage + 1);
           else finishTutorial();
         }, TUTORIAL_STAGE_DELAY_MS);
       }
@@ -2959,10 +3254,10 @@
         tutorialSkippedCount += 1;
         recordResearchEvent("tutorial_stage_skipped", {
           stage: tutorialStage + 1,
-          action: ["jump", "diagonal_bend_chest_open", "twist"][tutorialStage],
+          action: ["jump", "diagonal_bend_chest_open", "twist", "wind"][tutorialStage],
         });
         playSound("confirmSecondary", 0.52);
-        if (tutorialStage < 2) showTutorialStage(tutorialStage + 1);
+        if (tutorialStage < 3) showTutorialStage(tutorialStage + 1);
         else finishTutorial();
       }
 
@@ -2975,8 +3270,8 @@
         tutorialDots.forEach((dot) => { dot.className = "done"; });
         tutorialBadge.textContent = tutorialSkippedCount ? "チュートリアル終了！" : "チュートリアル クリア！";
         tutorialIcon.textContent = "🌟";
-        tutorialTitle.textContent = tutorialSkippedCount ? "本番へ進もう！" : "3つの動きをマスターしたよ！";
-        tutorialDescription.textContent = "両脚跳び、斜め下から胸を開く運動、体のねじりを、お手本に近い形で使い分けます。";
+        tutorialTitle.textContent = tutorialSkippedCount ? "本番へ進もう！" : "4つの動きをマスターしたよ！";
+        tutorialDescription.textContent = "両脚跳び、斜め下から胸を開く運動、体のねじり、腕振りと脚の曲げ伸ばしを使い分けます。風の攻撃は動作評価65点以上が目標です。";
         tutorialCue.textContent = "回避は55点、ジャンプ・ねじりは65点以上を目指そう！";
         tutorialStartButton.hidden = false;
         missionText.textContent = tutorialSkippedCount ? "チュートリアル終了！" : "チュートリアルクリア！";
@@ -2986,23 +3281,23 @@
 
       function updateTutorial(lm, now, hipRise, ankleRise, hipVelocity) {
         if (tutorialLocked) return;
+        if (tutorialStage === 3) { updateWind(lm, now); return; }
 
         if (tutorialStage === 0) {
-          const form = computeJumpQuality(lm, hipRise);
-          setFormQuality(form.quality, form.details);
+          const jump = sampleStableJump(lm, now);
           const imuJumpFresh = selectedInputMode === "sensor" && imuJumpCalibrationReady && now - imuLastReceivedAt <= IMU_STALE_MS;
-          const rising = hipVelocity < -0.00012;
-          const cameraJump = rising && hipRise > jumpHipThreshold && ankleRise > jumpAnkleThreshold && form.quality >= FORM_PASS_SCORE;
+          const cameraJump = jump.detected;
           if (!tutorialAirborne && cameraJump) cameraJumpDetectedAt = now;
           const cameraRecent = now - cameraJumpDetectedAt <= CAMERA_JUMP_HOLD_MS;
           const imuRecent = imuJumpFresh && now - imuJumpDetectedAt <= IMU_JUMP_HOLD_MS;
           if (!tutorialAirborne && cameraRecent && (!imuJumpFresh || imuRecent)) {
             tutorialAirborne = true;
-            pendingJumpQuality = form.quality;
-            tutorialCue.textContent = `一致度 ${Math.round(form.quality)}%！ 同じ場所へ着地しよう`;
+            pendingJumpQuality = jump.quality;
+            tutorialCue.textContent = `一致度 ${Math.round(jump.quality)}%！ 同じ場所へ着地しよう`;
             playSound("jump", 0.66);
           }
-          if (tutorialAirborne && Math.abs(hipRise) < LANDING_THRESHOLD) {
+          if (!tutorialAirborne) tutorialCue.textContent = jump.hint;
+          if (tutorialAirborne && jump.landed) {
             tutorialAirborne = false;
             if (pendingJumpQuality >= FORM_PASS_SCORE) completeTutorialStage();
           }
@@ -3048,6 +3343,8 @@
 
       function beginBattle() {
         gameMode = "battle";
+        feedbackEpoch += 1;
+        shell.dataset.action = "jump";
         recordResearchEvent("battle_start", { durationMs: BATTLE_DURATION_MS });
         trainingOverlay.classList.add("hidden");
         tutorialPanel.hidden = true;
@@ -3063,6 +3360,7 @@
         finishBattleButton.hidden = false;
         nextObstacleAt = now + 5200;
         nextBossAttackAt = now + 8200;
+        nextWindAt = now + 14000;
         showFormCoach("jump", "両脚をそろえ、左右同時に跳ぶ");
         missionText.textContent = "正しい両脚跳びで必殺技！";
         setStatus("バトル開始 — 両脚ジャンプ！", "お手本との一致度65%以上で必殺技が発動します");
@@ -3072,6 +3370,7 @@
       function updateBattleClock(now) {
         if (gameMode === "battle") {
           const remaining = battleEndsAt - now;
+          if (windActive && now >= windEndsAt) finishWind(now);
           battleTimer.textContent = formatTime(remaining);
           timerCard.classList.toggle("warning", remaining <= 30000);
           if (remaining <= 0) finishBattle(now);
@@ -3085,7 +3384,8 @@
 
       function finishBattle(now = performance.now(), reason = "time") {
         if (gameMode !== "battle") return;
-        recordResearchEvent("battle_finish", { reason, score, rank: getScoreRank(score).rank, defeats, avoided, reflectedAttacks });
+        recordResearchEvent("battle_finish", { reason, score, rank: getScoreRank(score).rank, defeats, avoided, reflectedAttacks, windAttacks });
+        windActive=false; windTracker.reset();
         gameMode = "result";
         hideFormCoach();
         finishBattleButton.hidden = true;
@@ -3118,6 +3418,7 @@
         resultDefeats.textContent = String(defeats);
         resultAvoids.textContent = String(avoided);
         resultReflects.textContent = String(reflectedAttacks);
+        document.querySelector("#result-wind").textContent = String(windAttacks);
         resultReturnAt = now + RESULT_DISPLAY_MS;
         returnCountdown.textContent = "10";
         resultOverlay.classList.remove("hidden");
@@ -3182,6 +3483,8 @@
 
       function updateJumpDetector(lm) {
         const now = performance.now();
+        const context = [gameMode, trainingStage, tutorialStage, obstacleActive, bossAttackActive, enemyReady].join(":");
+        if (context !== stableJumpContext) { resetStableJump(); stableJumpContext = context; }
         const hipY = average(lm[23].y, lm[24].y);
         const ankleY = average(lm[27].y, lm[28].y);
         const dt = Math.max(now - previousFrameAt, 1);
@@ -3190,6 +3493,10 @@
         previousFrameAt = now;
 
         if (!fullBodyVisible(lm)) {
+          windTracker.reset();
+          if (obstacleActive || bossAttackActive) actionTrackingLost = true;
+          resetStableJump();
+          jumpFusionState.textContent = "足先まで映してください（ジャンプ判定を一時停止）";
           resetTwistMotion();
           poseState.textContent = "全身を確認中";
           setStatus("頭から足先まで映してください", "カメラから少し離れると判定しやすくなります");
@@ -3256,6 +3563,9 @@
 
         if (gameMode !== "battle") return;
 
+        if (!windActive && !obstacleActive && !bossAttackActive && !airborne && enemyReady && now >= nextWindAt) startWind(now);
+        if (windActive) { updateWind(lm, now); return; }
+
         if (updateBossAttack(lm, now)) {
           if (!airborne && Math.abs(hipRise) < 0.014) {
             baselineHipY = baselineHipY * 0.997 + hipY * 0.003;
@@ -3279,10 +3589,8 @@
         }
 
         const cooldownComplete = now - lastJumpAt > COOLDOWN_MS;
-        const rising = hipVelocity < -0.00012;
-        const jumpForm = computeJumpQuality(lm, hipRise);
-        setFormQuality(jumpForm.quality, jumpForm.details);
-        const cameraJumpDetected = rising && hipRise > jumpHipThreshold && ankleRise > jumpAnkleThreshold && jumpForm.quality >= FORM_PASS_SCORE;
+        const jump = sampleStableJump(lm, now);
+        const cameraJumpDetected = jump.detected;
         if (!airborne && cooldownComplete && enemyReady && cameraJumpDetected) {
           cameraJumpDetectedAt = now;
         }
@@ -3294,12 +3602,12 @@
           ? cameraJumpRecent
             ? imuJumpRecent ? "カメラ＋IMU：ジャンプOK" : "カメラOK・IMU待ち"
             : imuJumpRecent ? "IMU OK・姿勢待ち" : "カメラ＋IMU待ち"
-          : selectedInputMode === "sensor" ? "MediaPipe代替" : "MediaPipeのみ";
+          : jump.hint;
 
         if (!airborne && cooldownComplete && enemyReady && fusedJumpDetected) {
           airborne = true;
           attackArmed = true;
-          pendingJumpQuality = jumpForm.quality;
+          pendingJumpQuality = jump.quality;
           lastJumpAt = now;
           cameraJumpDetectedAt = -Infinity;
           imuJumpDetectedAt = -Infinity;
@@ -3309,7 +3617,7 @@
           playSound("jump", 0.7);
         }
 
-        if (airborne && Math.abs(hipRise) < LANDING_THRESHOLD) {
+        if (airborne && jump.landed) {
           airborne = false;
           if (attackArmed && enemyReady) {
             triggerAttack();
@@ -3424,6 +3732,8 @@
       }
 
       function startBossAttack(now) {
+        actionTrackingLost = false;
+        shell.dataset.action = "twist";
         resetTwistMotion();
         bossAttackActive = true;
         bossAttackResolved = false;
@@ -3460,18 +3770,20 @@
           impactText.classList.remove("show");
           void impactText.offsetWidth;
           impactText.classList.add("show");
-          setStatus("反射成功！", `お手本一致度 ${quality}% — ${gained}点獲得！`);
+          announceOutcome("success", `反射成功！ ＋${gained}点`, "弾を跳ね返せました。次は：両脚ジャンプ");
           playSound("reflect", 0.82);
         } else {
           reflectZone.classList.add("hit");
-          setStatus("攻撃を受けた！", "次は弾が近づいたら、横へ曲げずに上体をねじりましょう");
+          announceOutcome(actionTrackingLost ? "tracking" : "retry", actionTrackingLost ? "全身が見えず、反射を確認できませんでした" : "今回は反射できませんでした", actionTrackingLost ? "足先まで映る位置に戻ろう。次は：両脚ジャンプ" : "次の弾では、正面を向いてから上体をねじろう。次は：両脚ジャンプ");
           playSound("impactText", 0.62);
         }
 
         const now = performance.now();
         nextBossAttackAt = now + 7200 + Math.random() * 2800;
         nextObstacleAt = Math.max(nextObstacleAt, now + 3200);
+        const feedbackRound = feedbackEpoch;
         window.setTimeout(() => {
+          if (gameMode !== "battle" || feedbackRound !== feedbackEpoch) return;
           bossAttackActive = false;
           bossAttackResolved = false;
           reflectZone.className = "reflect-zone";
@@ -3479,11 +3791,13 @@
           enemyZone.classList.remove("boss-hit");
           showFormCoach("jump", "両脚をそろえ、左右同時に跳ぶ");
           missionText.textContent = "正しい両脚跳びで必殺技！";
-          if (!airborne) setStatus("次の動きに備えよう！", "画面のお手本に近いほど高得点です");
-        }, 1050);
+          nextJumpPrompt();
+        }, 1600);
       }
 
       function startObstacle(now) {
+        actionTrackingLost = false;
+        shell.dataset.action = "diagonal";
         obstacleActive = true;
         obstacleResolved = false;
         obstacleStartedAt = now;
@@ -3524,28 +3838,34 @@
           impactText.classList.remove("show");
           void impactText.offsetWidth;
           impactText.classList.add("show");
-          setStatus("回避成功！", `連続動作の一致度 ${quality}% — ${gained}点獲得！`);
+          announceOutcome("success", `回避成功！ ＋${gained}点`, "曲げる → 胸を開く、両方できました。次は：両脚ジャンプ");
           playSound("dodgeWhoosh", 0.72);
         } else {
           obstacleZone.classList.add("hit");
-          setStatus("障害物に当たった！", "次は表示された方向へ、もう少し大きく曲げましょう");
+          announceOutcome(actionTrackingLost ? "tracking" : "retry", actionTrackingLost ? "全身が見えず、回避を確認できませんでした" : "今回は回避できませんでした", actionTrackingLost ? "足先まで映る位置に戻ろう。次は：両脚ジャンプ" : Number.isFinite(diagonalDownSeenAt) ? "曲げる動作はOK。胸を開く動作が未確認でした。次は：両脚ジャンプ" : "指定の足先へ曲げる動作が未確認でした。次は：両脚ジャンプ");
           playSound("impactText", 0.58);
         }
 
         nextObstacleAt = performance.now() + 6500 + Math.random() * 2500;
+        // Leave time for the explicitly announced jump after the outcome card.
+        nextBossAttackAt = Math.max(nextBossAttackAt, performance.now() + 4000);
+        const feedbackRound = feedbackEpoch;
         window.setTimeout(() => {
+          if (gameMode !== "battle" || feedbackRound !== feedbackEpoch) return;
           obstacleActive = false;
           obstacleResolved = false;
           obstacleZone.className = "obstacle-zone";
           obstacleZone.setAttribute("aria-hidden", "true");
           showFormCoach("jump", "両脚をそろえ、左右同時に跳ぶ");
           missionText.textContent = "正しい両脚跳びで必殺技！";
-          if (!airborne) setStatus("次の動きに備えよう！", "画面のお手本に近いほど高得点です");
-        }, 950);
+          nextJumpPrompt();
+        }, 1600);
       }
 
       function triggerAttack() {
         enemyReady = false;
+        nextObstacleAt = Math.max(nextObstacleAt, performance.now() + 3400);
+        nextBossAttackAt = Math.max(nextBossAttackAt, performance.now() + 3400);
         const quality = Math.max(FORM_PASS_SCORE, Math.min(100, Math.round(pendingJumpQuality)));
         const gained = Math.round(80 + quality * 1.2);
         recordResearchEvent("jump_attack_success", { quality, points: gained });
@@ -3559,17 +3879,19 @@
         impactText.classList.remove("show");
         void impactText.offsetWidth;
         impactText.classList.add("show");
-        setStatus("必殺・スタンプクラッシュ！", `お手本一致度 ${quality}% — ${gained}点獲得！`);
+        announceOutcome("success", `撃破成功！ ＋${gained}点`, "着地までできました。足を床につけて、次のモンスターを待とう");
         playSound("landing", 0.82);
         window.setTimeout(() => playSound("impactText", 0.54), 90);
         createParticles();
 
+        const feedbackRound = feedbackEpoch;
         window.setTimeout(() => {
+          if (gameMode !== "battle" || feedbackRound !== feedbackEpoch) return;
           enemyZone.classList.remove("defeated");
           enemyNumber.textContent = String(defeats + 1).padStart(2, "0");
           enemyReady = true;
-          if (!airborne) setStatus("次の敵です — ジャンプ！", "全身を映したまま、その場で跳んでください");
-        }, 1250);
+          nextJumpPrompt();
+        }, 1600);
       }
 
       function createParticles() {
@@ -3706,6 +4028,10 @@
             drawTrainingPreview(lm);
             updateJumpDetector(lm);
           } else {
+            if (obstacleActive || bossAttackActive) actionTrackingLost = true;
+            windTracker.reset();
+            if (gameMode === "battle" || gameMode === "tutorial") announceOutcome("tracking", "身体を見失いました", "足先までカメラに映してください");
+            resetStableJump();
             resetTwistMotion();
             drawTrainingPreview();
             poseState.textContent = "未検出";
