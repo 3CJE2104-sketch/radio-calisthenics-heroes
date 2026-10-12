@@ -2140,10 +2140,15 @@
       let feedbackEpoch = 0;
       let actionTrackingLost = false;
       function announceOutcome(kind, title, detail) {
+        if(gameMode==="battle" && battleMission && detail.includes("次は：両脚ジャンプ")) {
+          const next=missionDeck[0];
+          detail=detail.replace(/次は：両脚ジャンプ[！]?/g,next ? `次は：${missionStories[next][1]}` : "4つの挑戦が終了！ 次の章へ進もう");
+        }
         setStatus(title, detail);
         statusTitle.closest(".status-panel").dataset.outcome = kind;
       }
       function nextJumpPrompt() {
+        if (gameMode === "battle" && battleMission) return;
         shell.dataset.action = "jump";
         missionText.textContent = "次は：両脚ジャンプでモンスターを倒そう";
         setStatus("次は、両脚ジャンプ！", "両足を床につけて準備 → 軽く跳ぶ → 同じ場所に着地");
@@ -2549,7 +2554,7 @@
         window.setTimeout(()=>{
           if(gameMode!=="battle" || epoch!==feedbackEpoch)return;
           enemyZone.classList.remove("boss-hit"); enemyReady=true;
-          showFormCoach("jump","両脚をそろえ、左右同時に跳ぶ"); nextJumpPrompt(); resetStableJump();
+          nextJumpPrompt(); resetStableJump();
         },1600);
       }
 
@@ -2760,6 +2765,7 @@
       }
 
       function resetGameProgress() {
+        battleMission=null; missionDeck=[]; missionRound=0; missionIndex=0; lastMission=null;
         windTracker.reset(); windActive=false; nextWindAt=Infinity; windAttacks=0;
         feedbackEpoch += 1;
         actionTrackingLost = false;
@@ -3429,13 +3435,70 @@
         battleTimer.textContent = "03:00";
         timerCard.classList.remove("warning");
         finishBattleButton.hidden = false;
-        nextObstacleAt = now + 5200;
-        nextBossAttackAt = now + 8200;
-        nextWindAt = now + 14000;
-        showFormCoach("jump", "両脚をそろえ、左右同時に跳ぶ");
-        missionText.textContent = "正しい両脚跳びで必殺技！";
-        setStatus("街の元気を集めよう — 両脚ジャンプ！", "3分間の冒険！ お手本に合わせて元気スタンプを使おう");
+        nextObstacleAt = nextBossAttackAt = nextWindAt = Infinity;
+        missionDeck=[]; missionRound=0; missionIndex=0; lastMission=null;
+        prepareBattleMission(now);
         playSound("swordDraw", 0.68);
+      }
+
+      function shuffledMissions(previous = null, random = Math.random) {
+        const deck=["jump","diagonal","twist","wind"];
+        for(let i=deck.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[deck[i],deck[j]]=[deck[j],deck[i]];}
+        if(deck[0]===previous){const j=1+Math.floor(random()*3);[deck[0],deck[j]]=[deck[j],deck[0]];}
+        return deck;
+      }
+      let missionDeck=[],missionRound=0,missionIndex=0,lastMission=null,battleMission=null;
+      const missionStories={
+        jump:["道をふさぐカチコチモンスターをほぐそう！","元気スタンプ：1回軽くジャンプ"],
+        diagonal:["魔王の壁をかわして、街への道を開こう！","のびのびバリア：斜め下へ曲げる → 胸を開く"],
+        twist:["街をねらう魔法を、魔王へ跳ね返そう！","くるっとリフレクト：正面から上体をねじる"],
+        wind:["暗い雲を吹き飛ばして、空を明るくしよう！","いきいきウインド：腕振り＋脚の曲げ伸ばしを2回"],
+      };
+      function prepareBattleMission(now){
+        if(!missionDeck.length){
+          missionDeck=shuffledMissions(lastMission);missionRound++;missionIndex=0;
+          recordResearchEvent("mission_round_start",{round:missionRound,order:[...missionDeck]});
+        }
+        const kind=missionDeck.shift();missionIndex++;
+        clearTutorialObjects();resetStableJump();enemyReady=true;
+        battleMission={kind,phase:"preview",until:now+3000,startScore:score};
+        shell.dataset.action=kind;
+        showFormCoach(kind,missionStories[kind][1]);
+        missionText.textContent=`街を救う旅 ${missionRound}章・${missionIndex}/4`;
+        setStatus(`📻 ラジ「${missionStories[kind][0]}」`, `次は ${missionStories[kind][1]}。お手本を見て準備しよう！`);
+        recordResearchEvent("mission_preview",{round:missionRound,index:missionIndex,action:kind});
+      }
+      function updateBattleMission(now){
+        const m=battleMission;if(!m)return;
+        if(m.phase==="cooldown"){
+          if(now>=m.until)prepareBattleMission(now);
+          return;
+        }
+        if(m.phase==="preview"){
+          if(now<m.until)return;
+          m.phase="active";resetStableJump();
+          const duration={jump:12000,diagonal:OBSTACLE_TIMEOUT_MS,twist:REFLECT_TIMEOUT_MS,wind:16000}[m.kind];
+          m.until=now+duration;
+          if(m.kind==="diagonal")startObstacle(now);
+          else if(m.kind==="twist")startBossAttack(now);
+          else if(m.kind==="wind")startWind(now);
+          else {missionText.textContent=missionStories.jump[0];setStatus("元気スタンプ！", "1回軽くジャンプしよう！");}
+          recordResearchEvent("mission_start",{round:missionRound,index:missionIndex,action:m.kind,durationMs:duration});
+        }
+        if(now>=m.until){
+          if(m.kind==="diagonal"&&!obstacleResolved)finishObstacle(false);
+          if(m.kind==="twist"&&!bossAttackResolved)finishBossAttack(false);
+          if(m.kind==="wind"&&windActive)finishWind(now);
+        }
+        const done=m.kind==="jump" ? !enemyReady||now>=m.until : m.kind==="diagonal" ? obstacleResolved : m.kind==="twist" ? bossAttackResolved : !windActive;
+        if(!done)return;
+        const success=score>m.startScore;
+        m.phase="cooldown";m.until=now+2300;lastMission=m.kind;
+        const next=missionDeck[0];
+        const detail=next ? `次は ${missionStories[next][1]}` : "4つの挑戦が終了！ ラジと次の通りへ進もう。次の章も順番が変わるよ！";
+        announceOutcome(success?"success":"retry",success?`街の元気 ＋${score-m.startScore}点！` : "今回はここまで。次の挑戦へ！",detail);
+        recordResearchEvent("mission_finish",{round:missionRound,index:missionIndex,action:m.kind,success,points:score-m.startScore});
+        if(!next)recordResearchEvent("mission_round_complete",{round:missionRound});
       }
 
       function storyProgress(points) {
@@ -3475,6 +3538,7 @@
         updateStory();
         if (gameMode === "battle") {
           const remaining = battleEndsAt - now;
+          if(remaining>0)updateBattleMission(now);
           if (windActive && now >= windEndsAt) finishWind(now);
           battleTimer.textContent = formatTime(remaining);
           timerCard.classList.toggle("warning", remaining <= 30000);
@@ -3676,7 +3740,7 @@
 
         if (gameMode !== "battle") return;
 
-        if (!windActive && !obstacleActive && !bossAttackActive && !airborne && enemyReady && now >= nextWindAt) startWind(now);
+        if (battleMission?.phase !== "active") return;
         if (windActive) { updateWind(lm, now); return; }
 
         if (updateBossAttack(lm, now)) {
@@ -3744,10 +3808,6 @@
         const imuBendFresh = selectedInputMode === "sensor" && imuBendCalibrationReady && now - imuLastReceivedAt <= IMU_STALE_MS;
         const imuBendRecent = imuBendFresh && now - imuBendDetectedAt <= IMU_BEND_HOLD_MS;
 
-        if (!obstacleActive && !bossAttackActive && !airborne && enemyReady && now >= nextObstacleAt) {
-          startObstacle(now);
-          return;
-        }
 
         if (!obstacleActive || obstacleResolved) {
           bendFusionState.textContent = imuBendFresh
@@ -3811,9 +3871,6 @@
           ? `一致 ${Math.round(twist.quality)}% / IMU ${Math.round(imuGyroSmoothed)}°/s`
           : `一致 ${Math.round(twist.quality)}%`;
 
-        if (!bossAttackActive && !obstacleActive && !airborne && enemyReady && now >= nextBossAttackAt) {
-          startBossAttack(now);
-        }
 
         if (!bossAttackActive) return false;
         if (bossAttackResolved) return true;
@@ -3896,8 +3953,6 @@
           reflectZone.className = "reflect-zone";
           reflectZone.setAttribute("aria-hidden", "true");
           enemyZone.classList.remove("boss-hit");
-          showFormCoach("jump", "両脚をそろえ、左右同時に跳ぶ");
-          missionText.textContent = "正しい両脚跳びで必殺技！";
           nextJumpPrompt();
         }, 1600);
       }
@@ -3963,8 +4018,6 @@
           obstacleResolved = false;
           obstacleZone.className = "obstacle-zone";
           obstacleZone.setAttribute("aria-hidden", "true");
-          showFormCoach("jump", "両脚をそろえ、左右同時に跳ぶ");
-          missionText.textContent = "正しい両脚跳びで必殺技！";
           nextJumpPrompt();
         }, 1600);
       }
