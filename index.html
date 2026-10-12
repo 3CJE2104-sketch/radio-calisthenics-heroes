@@ -1168,6 +1168,50 @@
       .game-shell[data-city-level="1"] { border-color:#818b64; }
       .game-shell[data-city-level="2"] { border-color:#69a890; }
       .game-shell[data-city-level="3"] { border-color:#c7ff4f; box-shadow:0 0 30px #c7ff4f22; }
+      /* Exhibition layout: the viewport, not the camera aspect ratio, sets the stage size. */
+      @media (min-width: 1101px) and (min-height: 650px) {
+        html, body { height:100%; overflow:hidden; }
+        .app { width:100%; max-width:none; height:100dvh; padding:10px 14px; display:flex; flex-direction:column; gap:10px; }
+        .topbar { flex:0 0 44px; margin:0; }
+        .layout { flex:1; min-height:0; grid-template-columns:minmax(0,1fr) clamp(390px,30vw,560px); grid-template-rows:minmax(0,1fr) clamp(200px,21vh,230px); gap:10px; align-items:stretch; }
+        .game-shell { grid-column:1; grid-row:1; height:100%; min-height:0; aspect-ratio:auto; border-radius:18px; }
+        .sidebar { display:contents; }
+        #motion-panel { grid-column:2; grid-row:1; min-height:0; }
+        #howto-panel { grid-column:1; grid-row:2; }
+        #story-city { grid-column:2; grid-row:2; }
+        .panel { padding:10px 12px; border-radius:14px; min-width:0; }
+        .panel h3 { margin:0 0 6px; font-size:clamp(13px,1vw,18px); }
+        #motion-panel { display:flex; flex-direction:column; justify-content:space-between; gap:4px; }
+        #motion-panel .meter-row { margin-bottom:3px; font-size:clamp(11px,.9vw,16px); }
+        #motion-panel .meter-track { height:6px; flex-shrink:0; }
+        #motion-panel .bend-meter { margin-top:2px; }
+        #motion-panel .quality-panel { margin-top:3px; padding-top:4px; }
+        #motion-panel .quality-title { font-size:12px; }
+        #motion-panel .quality-breakdown { margin-top:2px; font-size:clamp(10px,.7vw,13px); line-height:1.3; overflow-wrap:anywhere; }
+        #motion-panel .debug-grid { grid-template-columns:repeat(4,minmax(0,1fr)); gap:4px; margin-top:3px; }
+        #motion-panel .debug-cell { padding:4px; border-radius:6px; min-width:0; }
+        #motion-panel .debug-cell span { font-size:clamp(9px,.64vw,12px); }
+        #motion-panel .debug-cell strong { font-size:clamp(10px,.72vw,14px); line-height:1.2; overflow-wrap:anywhere; }
+        #motion-panel .debug-cell .imu-vector { white-space:normal; font-size:clamp(9px,.64vw,12px); }
+        #recalibrate-button { margin-top:2px; padding:6px; font-size:12px; }
+        #howto-panel .steps { grid-template-columns:repeat(4,minmax(0,1fr)); gap:6px 12px; }
+        #howto-panel .step { grid-template-columns:20px 1fr; gap:5px; }
+        #howto-panel .step-number { width:20px;height:20px;font-size:10px; }
+        #howto-panel .step strong { font-size:clamp(10px,.75vw,14px); }
+        #howto-panel .step span { font-size:clamp(9px,.65vw,12px); line-height:1.3; margin-top:1px; }
+        #howto-panel .notice { font-size:clamp(9px,.62vw,11px); margin:5px 0 0; line-height:1.3; }
+        #story-city { display:grid; grid-template-columns:42% minmax(0,1fr); grid-template-rows:auto 1fr auto; gap:5px 10px; align-items:center; }
+        #story-city h3 { grid-column:1/-1; }
+        #story-city svg { grid-column:1;grid-row:2;max-height:110px; }
+        #story-city progress { grid-column:1;grid-row:3; }
+        #story-message { grid-column:2;grid-row:2;margin:0;font-size:clamp(11px,.85vw,16px); }
+        #story-skill { grid-column:2;grid-row:3;font-size:clamp(10px,.72vw,14px); }
+        .tutorial-panel:not([hidden]) { padding:10px;gap:5px; }
+        .tutorial-description { font-size:clamp(12px,.9vw,16px); }
+        .tutorial-cue { font-size:clamp(12px,1vw,18px);min-height:2em; }
+        .tutorial-reference-slot { min-height:100px; }
+        .training-card { max-width:100%; }
+      }
     </style>
   </head>
   <body>
@@ -1181,6 +1225,7 @@
           </div>
         </div>
         <div class="top-actions">
+          <button id="fullscreen-button" class="sound-toggle" type="button">全画面表示</button>
           <button id="sound-toggle" class="sound-toggle" type="button" aria-pressed="true">効果音 ON</button>
           <div id="connection" class="connection" aria-live="polite">
             <i class="connection-dot"></i>
@@ -1407,7 +1452,7 @@
             <p id="story-message" aria-live="polite">街はまだ静か。4つの体操の力を集めよう！</p>
             <div id="story-skill" class="story-skill">身体調整：ヒーロースーツを準備しよう</div>
           </section>
-          <section class="panel">
+          <section id="howto-panel" class="panel">
             <h3>遊び方</h3>
             <div class="steps">
               <div class="step"><span class="step-number">1</span><div><strong>全身を映す</strong><span>頭から足先までカメラに入る位置へ移動します。</span></div></div>
@@ -1420,7 +1465,7 @@
             </div>
           </section>
 
-          <section class="panel">
+          <section id="motion-panel" class="panel">
             <h3>動作判定</h3>
             <div class="meter-row"><span>ジャンプ量</span><strong id="jump-value">0%</strong></div>
             <div class="meter-track"><div id="jump-meter" class="meter-fill"></div></div>
@@ -1462,7 +1507,7 @@
             <button id="recalibrate-button" class="secondary-button" disabled>基準姿勢を測り直す</button>
           </section>
 
-          <section class="panel">
+          <section id="judgment-note" class="panel">
             <h3>判定について</h3>
             <p class="notice">開始前に肩幅・胴体長・脚長を画面内の相対値として測定します。センサーありモードでは、肩幅の変化と肩甲骨付近のIMUジャイロを組み合わせて反射を判定します。IMU未接続時はMediaPipeだけで続行します。カメラ映像は保存しません。</p>
           </section>
@@ -1482,6 +1527,16 @@
       const ctx = canvas.getContext("2d");
       const shell = document.querySelector("#game-shell");
       const sidebar = document.querySelector(".sidebar");
+      // Keep the explanatory note visible beneath the help, outside the diagnostics column.
+      const judgmentNote=document.querySelector("#judgment-note");
+      document.querySelector("#howto-panel").appendChild(judgmentNote.querySelector(".notice"));
+      judgmentNote.remove();
+      const fullscreenButton=document.querySelector("#fullscreen-button");
+      fullscreenButton.addEventListener("click",async()=>{
+        try { if(document.fullscreenElement)await document.exitFullscreen();else await document.documentElement.requestFullscreen(); }
+        catch { fullscreenButton.textContent="F11で全画面表示"; }
+      });
+      document.addEventListener("fullscreenchange",()=>{fullscreenButton.textContent=document.fullscreenElement?"全画面を終了":"全画面表示";});
       const soundToggle = document.querySelector("#sound-toggle");
       const startButton = document.querySelector("#start-button");
       const modeButtons = [...document.querySelectorAll("[data-input-mode]")];
@@ -3855,11 +3910,7 @@
       }
 
       function syncWideLayoutHeight() {
-        if (window.innerWidth <= 1100) {
-          sidebar.style.height = "";
-          return;
-        }
-        sidebar.style.height = `${Math.round(shell.getBoundingClientRect().height)}px`;
+        sidebar.style.height = "";
       }
 
       function updateBossAttack(lm, now) {
