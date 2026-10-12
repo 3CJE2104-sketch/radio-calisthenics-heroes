@@ -1212,6 +1212,55 @@
         .tutorial-reference-slot { min-height:100px; }
         .training-card { max-width:100%; }
       }
+      /* Shared reference dock: same location in calibration, practice and battle. */
+      #howto-panel, #judgment-note { display:none; }
+      #reference-panel { min-width:0; display:flex; flex-direction:column; gap:8px; }
+      #reference-panel > h3 { margin:0; }
+      #reference-panel .form-coach { position:relative; inset:auto; width:100%; min-height:0; flex:1; display:flex; flex-direction:column; box-shadow:none; border:0; }
+      #reference-panel .form-coach[hidden] { display:none; }
+      #reference-panel .reference-display { flex:1; min-height:100px; aspect-ratio:auto; }
+      #reference-panel .reference-display canvas { position:absolute; inset:0; object-fit:contain; }
+      #reference-panel .reference-caption { position:static; flex:none; font-size:12px; padding:5px; }
+      #reference-panel .training-overlay, #reference-panel .tutorial-panel:not([hidden]) {
+        position:static; inset:auto; transform:none; width:100%; height:auto; min-height:0;
+        padding:0; background:none; border:0; box-shadow:none; display:block; overflow:visible;
+      }
+      #reference-panel .training-overlay.hidden { display:none; }
+      #reference-panel .training-card { width:100%; max-width:none; padding:0; background:none; border:0; box-shadow:none; }
+      #reference-panel .training-card h2, #reference-panel .tutorial-heading h2 { font-size:20px; margin:3px 0; }
+      #reference-panel .training-card > p, #reference-panel .tutorial-description { font-size:12px; line-height:1.4; margin:4px 0; }
+      #reference-panel .training-visuals, #tutorial-reference-slot { display:none; }
+      #reference-panel .training-cue, #reference-panel .tutorial-cue { font-size:15px; margin:5px 0; }
+      #reference-panel .training-dots, #reference-panel .tutorial-progress { margin:5px 0; }
+      #reference-panel .scan-grid { grid-template-columns:repeat(4,minmax(0,1fr)); gap:4px; margin:5px 0; }
+      #reference-panel .scan-item { padding:4px; }
+      #reference-panel .scan-item span { font-size:10px; }
+      #reference-panel .scan-item strong { font-size:12px; }
+      #reference-panel button { padding:8px; margin-top:4px; font-size:13px; }
+      #reference-panel .training-note, #reference-panel .tutorial-help { font-size:10px; margin:4px 0; }
+      #reference-panel .tutorial-icon { font-size:24px; }
+      #reference-panel .tutorial-heading { gap:6px; }
+      #reference-panel .training-actions { margin-top:5px; gap:4px; }
+      #reference-panel .training-actions[hidden], #reference-panel .scan-grid[hidden] { display:none; }
+      #reference-placeholder { color:var(--muted); text-align:center; margin:auto; }
+      #reference-panel:has(.form-coach:not([hidden])) #reference-placeholder { display:none; }
+      @media (min-width:1101px) and (min-height:650px) {
+        .layout { grid-template-rows:minmax(0,1fr) clamp(220px,25vh,270px); }
+        #reference-panel { grid-column:2; grid-row:1; overflow:hidden; }
+        #motion-panel { grid-column:1; grid-row:2; display:grid; grid-template-columns:minmax(220px,1fr) minmax(0,3fr); gap:5px 12px; align-content:start; }
+        #motion-panel .motion-meters { grid-column:1; grid-row:1 / 3; min-width:0; }
+        #motion-panel h3 { margin:0 0 7px; }
+        #motion-panel .bend-meter { margin-top:8px; }
+        #motion-panel .quality-panel { margin-top:8px; }
+        #motion-panel .debug-grid { grid-column:2; grid-row:1; grid-template-columns:repeat(5,minmax(0,1fr)); margin:0; }
+        #motion-panel #recalibrate-button { grid-column:2; grid-row:2; width:100%; }
+      }
+      @media (max-width:1100px), (max-height:649px) {
+        .sidebar { position:static; max-height:none; overflow:visible; }
+        #reference-panel { min-height:480px; }
+        #reference-panel .reference-display { min-height:240px; }
+        #motion-panel .debug-grid { grid-template-columns:repeat(4,minmax(0,1fr)); }
+      }
     </style>
   </head>
   <body>
@@ -1527,10 +1576,25 @@
       const ctx = canvas.getContext("2d");
       const shell = document.querySelector("#game-shell");
       const sidebar = document.querySelector(".sidebar");
-      // Keep the explanatory note visible beneath the help, outside the diagnostics column.
-      const judgmentNote=document.querySelector("#judgment-note");
-      document.querySelector("#howto-panel").appendChild(judgmentNote.querySelector(".notice"));
-      judgmentNote.remove();
+      // Mount all phase guidance outside the camera shell, once (never reparent per frame).
+      document.querySelector("#howto-panel").remove();
+      document.querySelector("#judgment-note").remove();
+      const referencePanel = document.createElement("section");
+      referencePanel.id = "reference-panel";
+      referencePanel.className = "panel";
+      referencePanel.setAttribute("aria-label", "お手本と練習の案内");
+      referencePanel.innerHTML = '<h3>お手本</h3><p id="reference-placeholder">ゲームを開始すると、ここにお手本が表示されます。</p>';
+      sidebar.prepend(referencePanel);
+      referencePanel.append(document.querySelector("#form-coach"), document.querySelector("#training-overlay"), document.querySelector("#tutorial-panel"));
+      document.querySelector("#form-coach").append(document.querySelector("#reference-caption"));
+      const motionPanel = document.querySelector("#motion-panel");
+      const motionMeters = document.createElement("div");
+      motionMeters.className = "motion-meters";
+      while (motionPanel.firstElementChild && !motionPanel.firstElementChild.classList.contains("debug-grid")) {
+        motionMeters.append(motionPanel.firstElementChild);
+      }
+      motionPanel.prepend(motionMeters);
+      document.querySelector(".layout").append(motionPanel, document.querySelector("#story-city"));
       const fullscreenButton=document.querySelector("#fullscreen-button");
       fullscreenButton.addEventListener("click",async()=>{
         try { if(document.fullscreenElement)await document.exitFullscreen();else await document.documentElement.requestFullscreen(); }
@@ -2387,7 +2451,7 @@
       referenceScan.height = 180;
       const referenceScanContext = referenceScan.getContext("2d", { willReadFrequently: true });
       const referenceDisplayBounds = new Map();
-      const referenceDisplayTimes = new WeakMap();
+      const referenceDisplayTimes = new Map();
 
       function findReferenceBounds(pixels, width, height) {
         let left = width, top = height, right = -1, bottom = -1;
@@ -2405,8 +2469,13 @@
       function drawEnlargedReference(source) {
         if (source.readyState < 2 || !source.videoWidth) return;
         const previous = referenceDisplayTimes.get(source);
-        if (previous?.src === source.currentSrc && previous.time === source.currentTime) return;
-        const target = document.querySelector(source === referenceVideo ? "#reference-display-canvas" : "#coach-display-canvas");
+        const target = document.querySelector("#coach-display-canvas");
+        // Match the dock's aspect ratio so a tall reference panel does not letterbox the skeleton.
+        const rect = target.parentElement.getBoundingClientRect();
+        const width = Math.max(1, Math.round(rect.width * devicePixelRatio));
+        const height = Math.max(1, Math.round(rect.height * devicePixelRatio));
+        if (previous?.src === source.currentSrc && previous.time === source.currentTime && previous.width === width && previous.height === height && previous.source === source) return;
+        if (target.width !== width || target.height !== height) { target.width = width; target.height = height; }
         const display = target.getContext("2d");
         referenceScanContext.drawImage(source, 0, 0, 320, 180);
         const frame = findReferenceBounds(referenceScanContext.getImageData(0, 0, 320, 180).data, 320, 180);
@@ -2431,7 +2500,8 @@
         display.fillRect(0, 0, target.width, target.height);
         display.drawImage(source, sx, sy, sw, sh,
           (target.width - sw * scale) / 2, (target.height - sh * scale) / 2, sw * scale, sh * scale);
-        referenceDisplayTimes.set(source, { src: source.currentSrc, time: source.currentTime });
+        referenceDisplayTimes.clear(); // Both phase videos share one visible canvas.
+        referenceDisplayTimes.set(source, { src: source.currentSrc, time: source.currentTime, width, height, source });
       }
 
       function setReferenceMotion(kind, caption = "") {
@@ -2441,6 +2511,7 @@
         formCoach.querySelector(".form-coach-head span").textContent = wind ? "風の攻撃：動作評価" : "お手本の動き";
         const src = referenceClips[kind];
         if (!src) return;
+        formCoach.hidden = false;
         currentReferenceMotion = kind;
         [referenceVideo, coachVideo].forEach((element) => {
           if (element.getAttribute("src") !== src) {
@@ -2471,14 +2542,10 @@
       }
 
       function showFormCoach(kind, label) {
-        const slot = document.querySelector("#tutorial-reference-slot");
-        if (!formCoachHome) formCoachHome = formCoach.parentElement;
-        (tutorialPanel.hidden ? formCoachHome : slot).appendChild(formCoach);
         setReferenceMotion(kind, label);
         formCoach.hidden = false;
       }
 
-      let formCoachHome = null;
       function hideFormCoach() {
         formCoach.hidden = true;
         coachVideo.pause();
