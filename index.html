@@ -1260,6 +1260,22 @@
         #reference-panel .reference-display { min-height:240px; }
         #motion-panel .debug-grid { grid-template-columns:repeat(4,minmax(0,1fr)); }
       }
+      /* Story celebrations stay at the edges; the central 70% stays clear. */
+      .story-camera-effect { position:absolute; inset:0; z-index:3; pointer-events:none; overflow:hidden; border-radius:inherit; opacity:0; }
+      .story-camera-effect[data-effect] { animation:story-edge-fade 3.8s ease-out both; }
+      .story-camera-effect[data-effect="1"] { background:linear-gradient(90deg,rgba(255,201,99,.18),transparent 12%,transparent 88%,rgba(255,201,99,.18)); }
+      .story-camera-effect[data-effect="2"] { background:linear-gradient(90deg,rgba(255,162,196,.12),transparent 10%,transparent 90%,rgba(166,233,156,.12)); }
+      .story-camera-effect[data-effect="3"] { background:radial-gradient(ellipse at 0 0,rgba(255,218,116,.3),transparent 24%),radial-gradient(ellipse at 100% 0,rgba(255,233,173,.3),transparent 24%); }
+      .story-camera-effect i { position:absolute; top:calc(28% + var(--row) * 9%); left:calc(3% + var(--side) * 92%); width:7px; height:7px; border-radius:50%; background:#ffe6a1; box-shadow:0 0 12px #ffd267; animation:story-edge-rise 3.5s ease-out both; animation-delay:calc(var(--row) * 60ms); }
+      .story-camera-effect[data-effect="2"] i { width:9px;height:6px;border-radius:80% 10% 80% 10%;background:#ffc8df;box-shadow:none; }
+      .story-camera-effect[data-effect="3"] i { background:#fff1ba;box-shadow:0 0 18px #ffe19a; }
+      .story-camera-effect span { position:absolute;left:16px;bottom:16px;max-width:30%;font-size:clamp(11px,1vw,16px);padding:5px 9px;border-radius:12px;background:rgba(6,18,30,.7);color:#fff1cf; }
+      @keyframes story-edge-fade { 0%{opacity:0} 16%,65%{opacity:1} 100%{opacity:0} }
+      @keyframes story-edge-rise { from{transform:translateY(12px);opacity:0} 25%{opacity:.65} to{transform:translateY(-28px);opacity:0} }
+      @media (prefers-reduced-motion:reduce) {
+        .story-camera-effect i { display:none; }
+        .story-camera-effect[data-effect] { animation:story-edge-fade 2s ease-out both; }
+      }
     </style>
   </head>
   <body>
@@ -1290,6 +1306,7 @@
             <div class="floor-guide" aria-hidden="true"></div>
           </div>
 
+          <div id="story-camera-effect" class="story-camera-effect" aria-hidden="true"></div>
           <div id="enemy-zone" class="enemy-zone" aria-label="敵キャラクター">
             <span class="enemy-label">カチコチモンスター <b id="enemy-number">01</b></span>
             <div class="enemy"></div>
@@ -3439,6 +3456,40 @@
         if(!next)recordResearchEvent("mission_round_complete",{round:missionRound});
       }
 
+      function createStoryEffectTracker() {
+        let previousLevel = 0;
+        return (mode, level) => {
+          if (mode !== "battle") { previousLevel = 0; return 0; }
+          const effect = level > previousLevel ? level : 0;
+          previousLevel = level;
+          return effect;
+        };
+      }
+      const storyEffectTracker = createStoryEffectTracker();
+      function updateStoryEffects(level) {
+        const layer = document.querySelector("#story-camera-effect");
+        const effect = storyEffectTracker(gameMode, level);
+        if (gameMode !== "battle") {
+          delete layer.dataset.effect;
+          layer.replaceChildren();
+          return;
+        }
+        if (!effect) return;
+        delete layer.dataset.effect;
+        layer.replaceChildren();
+        for (let side=0; side<2; side++) for (let row=0; row<5; row++) {
+          const particle = document.createElement("i");
+          particle.style.setProperty("--side", side);
+          particle.style.setProperty("--row", row);
+          layer.append(particle);
+        }
+        const caption = document.createElement("span");
+        caption.textContent = ["", "街灯がともった！", "街に花が咲いた！", "街に朝が戻った！"][effect];
+        layer.append(caption);
+        void layer.offsetWidth; // Restart only on a new story milestone.
+        layer.dataset.effect = String(effect);
+      }
+
       function storyProgress(points) {
         const level = points >= 300 ? 3 : points >= 150 ? 2 : points >= 50 ? 1 : 0;
         return { level, message: ["街はまだ静か。3つの体操の力を集めよう！", "街灯がついたよ！ 街にあたたかさが戻ってきた。", "花が咲いたよ！ みんなの元気が戻ってきた。", "街に朝が戻ったよ！ ここからも無理なく動こう！"][level] };
@@ -3451,6 +3502,7 @@
         if (storyViewKey === key) return;
         storyViewKey = key;
         const progress = storyProgress(score);
+        updateStoryEffects(progress.level);
         document.querySelector("#story-city").dataset.level = String(progress.level);
         shell.dataset.cityLevel = String(progress.level);
         document.querySelector("#story-energy").value = Math.min(score,300);
