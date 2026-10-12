@@ -1146,6 +1146,8 @@
       .status-panel[data-outcome="retry"] strong { color: #ffd452; }
       .status-panel[data-outcome="tracking"] { border: 2px solid var(--cyan); }
       .game-shell[data-action="diagonal"] .enemy-zone,
+      .game-shell[data-action="wind"] .enemy-zone,
+      .game-shell[data-action="calibration"] .enemy-zone,
       .game-shell[data-action="twist"] .enemy-zone { visibility: hidden; }
       .enemy-zone.defeated { visibility: hidden; }
       @media (prefers-reduced-motion: reduce) {
@@ -2527,6 +2529,7 @@
       }
 
       function setCalibrationReference() {
+        shell.dataset.action = "calibration";
         setReferenceMotion("twist", "薄い黄色のお手本骨格に身体を重ね、正面を向いて静止してください");
         lastReferenceVideoTime = -1;
         lastReferenceDetectionAt = -Infinity;
@@ -2554,7 +2557,7 @@
       function setFormQuality(value, details) {
         currentFormQuality = Math.round(Math.max(0, Math.min(100, value)));
         const label = `${currentFormQuality}%`;
-        const passingScore = currentReferenceMotion === "wind" ? (gameMode === "training" ? 45 : 50) : currentReferenceMotion === "diagonal"
+        const passingScore = currentReferenceMotion === "wind" ? (gameMode === "training" ? 35 : 40) : currentReferenceMotion === "diagonal"
           ? (gameMode === "training" ? 50 : DODGE_PASS_SCORE)
           : (gameMode === "training" ? 58 : FORM_PASS_SCORE);
         const grade = currentFormQuality >= FORM_EXCELLENT_SCORE
@@ -2576,14 +2579,14 @@
         return { reset, update(p) {
           if (!p.valid || (s.last !== null && p.now - s.last > 250)) { reset(); if (!p.valid) return { hint: "手首・ひざ・足先まで映してください", quality: 0 }; }
           s.last = p.now;
-          const standing = p.bend < 18 && p.spread < 1.15 && p.upright > .55;
+          const standing = p.bend < 25 && p.spread < 1.35 && p.upright > .5;
           // Relative change prevents a static shallow bend from passing both phases.
-          const opened = s.neutral && p.bend >= 12 && p.bend <= 70 && p.bend-s.neutral.bend >= 8
-            && p.spread >= 1.3 && p.spread-s.neutral.spread >= .55 && p.upright > .55 && p.symmetry > .45;
+          const opened = s.neutral && p.bend >= 8 && p.bend <= 75 && p.bend-s.neutral.bend >= 5
+            && p.spread >= 1.15 && p.spread-s.neutral.spread >= .35 && p.upright > .5 && p.symmetry > .45;
           const held = condition => {
             if (!condition) { s.since = null; return false; }
             if (s.since === null) s.since = p.now;
-            return p.now - s.since >= 80;
+            return p.now - s.since >= 60;
           };
           let hint = "腕を前で交差して、脚を伸ばそう";
           if (s.phase === "ready" && held(standing)) {
@@ -2595,12 +2598,12 @@
             }
           } else if (s.phase === "close") {
             hint = "腕を前で交差して、脚を伸ばそう。かかともリズムよく！";
-            if (held(standing && s.peak.bend-p.bend >= 8 && s.peak.spread-p.spread >= .55)) {
+            if (held(standing && s.peak.bend-p.bend >= 5 && s.peak.spread-p.spread >= .35)) {
               const duration = p.now - s.started;
               if (duration >= 350 && duration <= 7000) {
                 const peak = s.peak;
-                const arm = Math.min(1, (peak.spread - p.spread) / 1.3);
-                const legs = Math.min(1, (peak.bend - p.bend) / 22);
+                const arm = Math.min(1, (peak.spread - p.spread) / 1.1);
+                const legs = Math.min(1, (peak.bend - p.bend) / 16);
                 const rhythm = s.cycles.length ? Math.min(duration, s.cycles[0].duration) / Math.max(duration, s.cycles[0].duration) : 1;
                 // Heel motion is only an optional 10-point component: front-view depth is uncertain.
                 const heelVisible = peak.heel !== null && p.heel !== null;
@@ -2615,7 +2618,7 @@
                 if (s.cycles.length === 2) {
                   const quality = s.cycles.reduce((a,c)=>a+c.quality,0)/2;
                   const cycles = s.cycles; reset();
-                  return { completed: true, quality, cycles, hint: quality >= 50 ? "腕と脚が連動したよ！" : "腕と脚を一緒に、同じリズムでもう一度" };
+                  return { completed: true, quality, cycles, hint: quality >= 40 ? "腕と脚が連動したよ！" : "腕と脚を一緒に、同じリズムでもう一度" };
                 }
               } else s.cycles = [];
               s.phase = "open"; s.started = p.now; s.since = null; s.neutral = { ...p };
@@ -2667,7 +2670,7 @@
       function finishWind(now, result = null) {
         if (!windActive) return;
         windActive = false; windTracker.reset();
-        const success = result?.completed && result.quality >= 50;
+        const success = result?.completed && result.quality >= 40;
         const gained = success ? Math.round(80+result.quality*1.2) : 0;
         if (success) { windAttacks++; score += gained; scoreLabel.textContent=String(score).padStart(4,"0"); windEffect(); enemyZone.classList.add("boss-hit"); }
         recordResearchEvent("wind_finish", { success, gained, quality: result?.quality ?? null, cycles: result?.cycles ?? [], evaluation:"camera_rules_with_reference_when_available" });
@@ -2692,7 +2695,7 @@
         else setStatus("風の攻撃にチャレンジ", result.hint);
         if(result.completed){
           recordResearchEvent("wind_cycle_pair",result);
-          if(result.quality>=50){
+          if(result.quality>=40){
             if(gameMode==="tutorial")completeTutorialStage();
             else finishWind(now,result);
           }
@@ -3123,6 +3126,7 @@
           ["4/4", "腕を振って脚を曲げ伸ばす運動", "お手本を見て、腕を横へ振りながら両ひざを軽く曲げ、前で交差して脚を伸ばしましょう。2回連動させます。この運動はカメラで評価します。", "腕を横へ＋曲げる → 前で交差＋伸ばす。2回やってみよう！"],
         ];
         const [progress, title, description, cue] = stages[stage];
+        shell.dataset.action = ["twist", "jump", "diagonal", "wind"][stage];
         trainingProgress.textContent = `HERO SCAN ${progress}`;
         trainingTitle.textContent = title;
         trainingDescription.textContent = description;
@@ -3187,9 +3191,9 @@
           trainingFill.style.width = `${result.completed ? 100 : (result.completedCycles || 0)*50}%`;
           if (result.completed) {
             trainingWindQuality = Math.max(trainingWindQuality ?? 0, result.quality);
-            recordResearchEvent("training_wind_evaluation", { ...result, passed: result.quality >= 45 });
-            if (result.quality >= 45) completeTrainingStage();
-            else trainingCue.textContent = `動作評価${Math.round(result.quality)}点。45点を目指してもう一度！ 次へスキップもできます`;
+            recordResearchEvent("training_wind_evaluation", { ...result, passed: result.quality >= 35 });
+            if (result.quality >= 35) completeTrainingStage();
+            else trainingCue.textContent = `動作評価${Math.round(result.quality)}点。35点を目指してもう一度！ 次へスキップもできます`;
           }
           return;
         }
@@ -3485,8 +3489,8 @@
         tutorialBadge.textContent = tutorialSkippedCount ? "チュートリアル終了！" : "チュートリアル クリア！";
         tutorialIcon.textContent = "🌟";
         tutorialTitle.textContent = tutorialSkippedCount ? "本番へ進もう！" : "4つの動きをマスターしたよ！";
-        tutorialDescription.textContent = "両脚跳び、斜め下から胸を開く運動、体のねじり、腕振りと脚の曲げ伸ばしを使い分けます。風の攻撃は動作評価50点以上が目標です。";
-        tutorialCue.textContent = "ジャンプは1回跳べばOK！ 回避55点、ねじり65点、風50点が目標！";
+        tutorialDescription.textContent = "両脚跳び、斜め下から胸を開く運動、体のねじり、腕振りと脚の曲げ伸ばしを使い分けます。風の攻撃は動作評価40点以上が目標です。";
+        tutorialCue.textContent = "ジャンプは1回跳べばOK！ 回避55点、ねじり65点、風40点が目標！";
         tutorialStartButton.hidden = false;
         missionText.textContent = tutorialSkippedCount ? "チュートリアル終了！" : "チュートリアルクリア！";
         setStatus("準備OK！", "「本番スタート！」を押すと1分間のバトルが始まります");
