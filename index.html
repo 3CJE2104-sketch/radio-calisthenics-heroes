@@ -813,8 +813,6 @@
       .reference-display { position: relative; aspect-ratio: 16 / 9; background: #000; }
       .reference-display video { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; pointer-events: none; }
       .reference-display canvas { display: block; width: 100%; height: 100%; }
-      .reference-display:has(#wind-guide:not([hidden])) { aspect-ratio: auto; overflow: auto; }
-      #wind-guide a { color: #53edff; }
       .form-coach-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; }
       .form-coach-head span { color: var(--cyan); font-size: .68rem; font-weight: 950; letter-spacing: .08em; }
       .form-coach-head strong { color: var(--lime); font-size: 1rem; }
@@ -1146,7 +1144,6 @@
       .status-panel[data-outcome="retry"] strong { color: #ffd452; }
       .status-panel[data-outcome="tracking"] { border: 2px solid var(--cyan); }
       .game-shell[data-action="diagonal"] .enemy-zone,
-      .game-shell[data-action="wind"] .enemy-zone,
       .game-shell[data-action="calibration"] .enemy-zone,
       .game-shell[data-action="twist"] .enemy-zone { visibility: hidden; }
       .enemy-zone.defeated { visibility: hidden; }
@@ -1357,9 +1354,9 @@
 
           <div id="start-overlay" class="start-overlay">
             <div class="start-card">
-              <div class="kicker">うばわれた朝と、4つの体操の力</div>
+              <div class="kicker">うばわれた朝と、3つの体操の力</div>
               <h2>体操で、街に<br><em>朝を取り戻そう！</em></h2>
-              <p>カチコチ魔王が、街の元気を奪ってしまった！ 案内役のラジオ「ラジ」と4つの技を覚えて、街を明るくしよう。</p>
+              <p>カチコチ魔王が、街の元気を奪ってしまった！ 案内役のラジオ「ラジ」と3つの技を覚えて、街を明るくしよう。</p>
               <p class="story-note">📻 ラジ「大きな力はいらないよ。お手本を見て、無理なく、ていねいに動こう！」</p>
               <div class="mode-picker" role="radiogroup" aria-label="プレイモードを選択">
                 <button type="button" class="mode-option selected" data-input-mode="mediapipe" role="radio" aria-checked="true">
@@ -1407,7 +1404,7 @@
               <div id="training-cue" class="training-cue">準備中…</div>
               <div class="training-track"><div id="training-fill" class="training-fill"></div></div>
               <div id="training-dots" class="training-dots" aria-hidden="true">
-                <span class="training-dot active"></span><span class="training-dot"></span><span class="training-dot"></span><span class="training-dot"></span>
+                <span class="training-dot active"></span><span class="training-dot"></span><span class="training-dot"></span>
               </div>
               <button id="phase-skip-button" class="secondary-button phase-skip-button" type="button">身体調整をスキップして練習へ</button>
               <div id="scan-summary" class="scan-grid" hidden>
@@ -1418,7 +1415,6 @@
                 <div class="scan-item"><span>IMUねじり</span><strong id="scan-imu-twist">—</strong></div>
                 <div class="scan-item"><span>ジャンプ</span><strong id="scan-jump">—</strong></div>
                 <div class="scan-item"><span>前屈</span><strong id="scan-bend">—</strong></div>
-                <div class="scan-item"><span>腕振り＋脚の曲げ伸ばし（練習評価）</span><strong id="scan-wind">—</strong></div>
               </div>
               <div id="training-actions" class="training-actions" hidden>
                 <button id="battle-button" class="primary-button">チュートリアルへ</button>
@@ -1429,7 +1425,7 @@
           </div>
 
           <section id="tutorial-panel" class="tutorial-panel" aria-label="動きを練習する" hidden>
-            <div id="tutorial-badge" class="tutorial-badge">あそびかた 1/4</div>
+            <div id="tutorial-badge" class="tutorial-badge">あそびかた 1/3</div>
             <div class="tutorial-heading">
               <span id="tutorial-icon" class="tutorial-icon" aria-hidden="true">👾</span>
               <h2 id="tutorial-title">モンスターを踏みつぶそう！</h2>
@@ -1438,7 +1434,7 @@
             <div id="tutorial-reference-slot" class="tutorial-reference-slot"></div>
             <div id="tutorial-cue" class="tutorial-cue" role="status" aria-live="polite">両脚でジャンプ → 着地！</div>
             <div id="tutorial-progress" class="tutorial-progress" aria-label="チュートリアルの進み具合">
-              <span class="active"></span><span></span><span></span><span></span>
+              <span class="active"></span><span></span><span></span>
             </div>
             <button id="tutorial-next-button" class="secondary-button" type="button">次へ（できなくても進める）</button>
             <p class="tutorial-help">できなくても大丈夫。次へ進めます。無理せず動こう。</p>
@@ -1450,18 +1446,6 @@
             <div class="reference-display">
               <video id="coach-video" playsinline muted loop preload="auto"></video>
               <canvas id="coach-display-canvas" width="960" height="540" aria-label="全身を大きく表示したお手本"></canvas>
-              <div id="wind-guide" hidden style="padding:16px;text-align:center;color:#eaffff;background:#071422">
-                <strong>腕を振って脚を曲げ伸ばす運動</strong>
-                <svg viewBox="0 0 400 210" role="img" aria-label="腕を横へ振り脚を曲げる、腕を前で交差して脚を伸ばす、を繰り返す説明図" style="width:100%;max-height:250px">
-                  <g stroke="#53edff" stroke-width="7" fill="none" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="95" cy="34" r="13"/><path d="M95 50V108 M95 62L53 76L20 68 M95 62L137 76L170 68 M95 108L65 137L79 171 M95 108L125 137L111 171"/>
-                    <circle cx="300" cy="23" r="13"/><path d="M300 39V104 M300 51L275 82L316 103 M300 51L325 82L284 103 M300 104L289 168 M300 104L311 168"/>
-                  </g><g fill="#ceff58" font-size="15" text-anchor="middle"><text x="95" y="199">横へ振る＋脚を曲げる</text><text x="300" y="199">前で交差＋脚を伸ばす</text><text x="200" y="95">→</text></g>
-                </svg>
-                <p style="margin:4px">かかとも腕に合わせて上下。無理に深くしゃがまず、同じリズムで2回！</p>
-                <small>動きの説明図（動画一致度ではなく動作を評価）</small>
-                <div><a href="https://www.jp-life.japanpost.jp/radio/instruction/radio_first.html" target="_blank" rel="noopener noreferrer">公式の説明：ラジオ体操第一・2番</a></div>
-              </div>
             </div>
             <div class="form-coach-meter"><i id="coach-meter"></i></div>
           </aside>
@@ -1479,7 +1463,6 @@
                 <div class="result-item"><span>撃破</span><strong id="result-defeats">0</strong></div>
                 <div class="result-item"><span>回避</span><strong id="result-avoids">0</strong></div>
                 <div class="result-item"><span>反射</span><strong id="result-reflects">0</strong></div>
-                <div class="result-item"><span>風の攻撃</span><strong id="result-wind">0</strong></div>
               </div>
               <button id="research-download-button" class="secondary-button research-download" type="button" hidden>研究データをもう一度保存</button>
               <p id="research-save-note" class="research-save-note" hidden>同意した研究データを、このPCにJSON形式で保存しました。</p>
@@ -1500,19 +1483,18 @@
               <g class="flowers" fill="#ffc8da"><circle cx="34" cy="103" r="5"/><circle cx="185" cy="102" r="5"/><circle cx="262" cy="104" r="5"/></g>
             </svg>
             <progress id="story-energy" value="0" max="300" aria-label="街の元気"></progress>
-            <p id="story-message" aria-live="polite">街はまだ静か。4つの体操の力を集めよう！</p>
+            <p id="story-message" aria-live="polite">街はまだ静か。3つの体操の力を集めよう！</p>
             <div id="story-skill" class="story-skill">身体調整：ヒーロースーツを準備しよう</div>
           </section>
           <section id="howto-panel" class="panel">
             <h3>遊び方</h3>
             <div class="steps">
               <div class="step"><span class="step-number">1</span><div><strong>全身を映す</strong><span>頭から足先までカメラに入る位置へ移動します。</span></div></div>
-              <div class="step"><span class="step-number">2</span><div><strong>ヒーロースキャン</strong><span>身体サイズを調整し、ねじる・両脚跳び・斜め下から胸を開く・腕振り＋脚の曲げ伸ばし、の4種目を練習します。</span></div></div>
-              <div class="step"><span class="step-number">3</span><div><strong>チュートリアル</strong><span>4種類の動きを実際に試し、遊び方を覚えます。</span></div></div>
+              <div class="step"><span class="step-number">2</span><div><strong>ヒーロースキャン</strong><span>身体サイズを調整し、ねじる・両脚跳び・斜め下から胸を開く、の3種目を練習します。</span></div></div>
+              <div class="step"><span class="step-number">3</span><div><strong>チュートリアル</strong><span>3種類の動きを実際に試し、遊び方を覚えます。</span></div></div>
               <div class="step"><span class="step-number">4</span><div><strong>ジャンプで攻撃</strong><span>測定した跳び幅に合わせて必殺技が発動します。</span></div></div>
               <div class="step"><span class="step-number">5</span><div><strong>斜め下＋胸反らしで回避</strong><span>片足先へ斜め下に曲げ、起き上がって胸を大きく開きます。</span></div></div>
               <div class="step"><span class="step-number">6</span><div><strong>ねじって反射</strong><span>ボスの弾が接近したら、脚を動かさず上体を大きくねじります。</span></div></div>
-              <div class="step"><span class="step-number">7</span><div><strong>腕振り＋脚の曲げ伸ばしで風</strong><span>案内が出たら、腕を横へ振ってひざを軽く曲げ、前で交差して伸ばします。2回連動させて動作評価65点以上で攻撃！ この種目は両モードともカメラで評価します。</span></div></div>
             </div>
           </section>
 
@@ -1708,7 +1690,6 @@
         twist: "assets/reference/twist.mp4",
         jump: "assets/reference/jump.mp4",
         diagonal: "assets/reference/diagonal-bend.mp4",
-        wind: "assets/reference/arm-swing.mp4",
       };
 
       const soundFiles = {
@@ -1918,13 +1899,12 @@
         const exercises = {
           diagonal: "体を斜め下に曲げ胸を反らす運動",
           jump: "両脚で跳ぶ運動", twist: "体をねじる運動",
-          wind: "腕を振って脚を曲げ伸ばす運動",
           calibration: "身体調整（正面で静止）", none: "運動の指示なし",
         };
         let exerciseId = "none";
         if (gameMode === "calibration") exerciseId = "calibration";
-        if (gameMode === "training") exerciseId = ["twist", "jump", "diagonal", "wind"][trainingStage];
-        if (gameMode === "tutorial") exerciseId = ["jump", "diagonal", "twist", "wind"][tutorialStage];
+        if (gameMode === "training") exerciseId = ["twist", "jump", "diagonal"][trainingStage];
+        if (gameMode === "tutorial") exerciseId = ["jump", "diagonal", "twist"][tutorialStage];
         if (gameMode === "battle") exerciseId = currentReferenceMotion || "none";
         return {
           phaseName: phaseNames[gameMode] || gameMode,
@@ -2046,7 +2026,7 @@
             imuBendThreshold: rounded(imuBendThreshold, 3),
             imuTwistThreshold: rounded(imuTwistThreshold, 3),
           },
-          result: { score, rank: getScoreRank(score).rank, defeats, avoided, reflectedAttacks, windAttacks },
+          result: { score, rank: getScoreRank(score).rank, defeats, avoided, reflectedAttacks },
           scoreRankCriteria: SCORE_RANKS.map(({ rank, minScore }) => ({ rank, minScore })),
         };
         const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
@@ -2263,7 +2243,7 @@
       function announceOutcome(kind, title, detail) {
         if(gameMode==="battle" && battleMission && detail.includes("次は：両脚ジャンプ")) {
           const next=missionDeck[0];
-          detail=detail.replace(/次は：両脚ジャンプ[！]?/g,next ? `次は：${missionStories[next][1]}` : "4つの挑戦が終了！ 次の章へ進もう");
+          detail=detail.replace(/次は：両脚ジャンプ[！]?/g,next ? `次は：${missionStories[next][1]}` : "3つの挑戦が終了！ 次の章へ進もう");
         }
         setStatus(title, detail);
         statusTitle.closest(".status-panel").dataset.outcome = kind;
@@ -2507,10 +2487,8 @@
       }
 
       function setReferenceMotion(kind, caption = "") {
-        const wind = kind === "wind";
-        document.querySelector("#wind-guide").hidden = true;
         document.querySelector("#coach-display-canvas").style.display = "";
-        formCoach.querySelector(".form-coach-head span").textContent = wind ? "風の攻撃：動作評価" : "お手本の動き";
+        formCoach.querySelector(".form-coach-head span").textContent = "お手本の動き";
         const src = referenceClips[kind];
         if (!src) return;
         formCoach.hidden = false;
@@ -2557,150 +2535,19 @@
       function setFormQuality(value, details) {
         currentFormQuality = Math.round(Math.max(0, Math.min(100, value)));
         const label = `${currentFormQuality}%`;
-        const passingScore = currentReferenceMotion === "wind" ? (gameMode === "training" ? 35 : 40) : currentReferenceMotion === "diagonal"
+        const passingScore = currentReferenceMotion === "diagonal"
           ? (gameMode === "training" ? 50 : DODGE_PASS_SCORE)
           : (gameMode === "training" ? 58 : FORM_PASS_SCORE);
         const grade = currentFormQuality >= FORM_EXCELLENT_SCORE
           ? "たいへんよくできました"
           : currentFormQuality >= passingScore ? "姿勢点OK" : "お手本に合わせよう";
         formScore.textContent = label;
-        coachScore.textContent = currentReferenceMotion === "wind" ? `${currentFormQuality}点` : label;
+        coachScore.textContent = label;
         formScoreMeter.style.width = label;
         coachMeter.style.width = label;
         qualityBreakdown.textContent = `${grade}｜${details}`;
       }
 
-      // Game-specific heuristics inspired by Radio Taiso #2, not an official scoring rubric.
-      // Samples are normalized by body size. A complete open/bend -> close/extend cycle is required.
-      function createWindTracker() {
-        let s;
-        const reset = () => { s = { phase: "ready", since: null, last: null, cycles: [], peak: null, neutral: null, started: 0 }; };
-        reset();
-        return { reset, update(p) {
-          if (!p.valid || (s.last !== null && p.now - s.last > 250)) { reset(); if (!p.valid) return { hint: "手首・ひざ・足先まで映してください", quality: 0 }; }
-          s.last = p.now;
-          const standing = p.bend < 25 && p.spread < 1.35 && p.upright > .5;
-          // Relative change prevents a static shallow bend from passing both phases.
-          const opened = s.neutral && p.bend >= 8 && p.bend <= 75 && p.bend-s.neutral.bend >= 5
-            && p.spread >= 1.15 && p.spread-s.neutral.spread >= .35 && p.upright > .5 && p.symmetry > .45;
-          const held = condition => {
-            if (!condition) { s.since = null; return false; }
-            if (s.since === null) s.since = p.now;
-            return p.now - s.since >= 60;
-          };
-          let hint = "腕を前で交差して、脚を伸ばそう";
-          if (s.phase === "ready" && held(standing)) {
-            s.phase = "open"; s.since = null; s.started = p.now; s.neutral = { ...p };
-          } else if (s.phase === "open") {
-            hint = "腕を横へ振るのに合わせて、両ひざを軽く曲げよう";
-            if (held(opened)) {
-              s.peak = { ...p }; s.phase = "close"; s.since = null;
-            }
-          } else if (s.phase === "close") {
-            hint = "腕を前で交差して、脚を伸ばそう。かかともリズムよく！";
-            if (held(standing && s.peak.bend-p.bend >= 5 && s.peak.spread-p.spread >= .35)) {
-              const duration = p.now - s.started;
-              if (duration >= 350 && duration <= 7000) {
-                const peak = s.peak;
-                const arm = Math.min(1, (peak.spread - p.spread) / 1.1);
-                const legs = Math.min(1, (peak.bend - p.bend) / 16);
-                const rhythm = s.cycles.length ? Math.min(duration, s.cycles[0].duration) / Math.max(duration, s.cycles[0].duration) : 1;
-                // Heel motion is only an optional 10-point component: front-view depth is uncertain.
-                const heelVisible = peak.heel !== null && p.heel !== null;
-                const heel = heelVisible ? Math.min(1, Math.abs(peak.heel - p.heel) / .035) : 0;
-                const parts = { arms: arm*25, legs: legs*25, symmetry: Math.min(peak.symmetry,p.symmetry)*15,
-                  posture: Math.min(peak.upright,p.upright)*15, rhythm: rhythm*10, heels: heel*10 };
-                const featureQuality = Object.values(parts).reduce((a,b)=>a+b,0);
-                const referenceQuality = Number.isFinite(peak.reference) && Number.isFinite(p.reference)
-                  ? (peak.reference+p.reference)*50 : null;
-                const quality = referenceQuality === null ? featureQuality : featureQuality*.8+referenceQuality*.2;
-                s.cycles.push({ duration, quality, featureQuality, referenceQuality, parts, heelVisible });
-                if (s.cycles.length === 2) {
-                  const quality = s.cycles.reduce((a,c)=>a+c.quality,0)/2;
-                  const cycles = s.cycles; reset();
-                  return { completed: true, quality, cycles, hint: quality >= 40 ? "腕と脚が連動したよ！" : "腕と脚を一緒に、同じリズムでもう一度" };
-                }
-              } else s.cycles = [];
-              s.phase = "open"; s.started = p.now; s.since = null; s.neutral = { ...p };
-            }
-          }
-          if (s.phase !== "ready" && p.now-s.started > 7000) { reset(); hint = "いったん脚を伸ばして、もう一度始めよう"; }
-          return { completedCycles: s.cycles.length, quality: s.cycles[0]?.quality || 0, hint: `${s.cycles.length}/2回：${hint}` };
-        } };
-      }
-
-      const windTracker = createWindTracker();
-      let trainingWindQuality = null;
-      let windActive = false, windEndsAt = Infinity, nextWindAt = Infinity, windAttacks = 0;
-      function sampleWind(lm, now) {
-        const required = [11,12,15,16,23,24,25,26,27,28];
-        const valid = required.every(i => lm[i] && (lm[i].visibility ?? 0) > .6);
-        if (!valid) return windTracker.update({ now, valid: false });
-        const torso = Math.max(.04, distance(lm[11],lm[23]),distance(lm[12],lm[24]));
-        const width = Math.max(.04, Math.abs(lm[11].x-lm[12].x));
-        const left = 180-jointAngle(lm[23],lm[25],lm[27]);
-        const right = 180-jointAngle(lm[24],lm[26],lm[28]);
-        const upright = Math.max(0,1-Math.abs(average(lm[11].x,lm[12].x)-average(lm[23].x,lm[24].x))/torso*2);
-        const heelsVisible = [29,30,31,32].every(i => lm[i] && (lm[i].visibility ?? 0)>.7);
-        return windTracker.update({ now, valid, bend: average(left,right), spread: Math.abs(lm[15].x-lm[16].x)/width,
-          reference: latestReferenceLandmarks && now-lastReferenceDetectionAt<300 ? skeletonSimilarity(lm) : null,
-          symmetry: Math.max(0,1-Math.abs(left-right)/35), upright,
-          heel: heelsVisible ? (average(lm[31].y,lm[32].y)-average(lm[29].y,lm[30].y))/torso : null });
-      }
-
-      function startWind(now) {
-        windTracker.reset(); windActive = true; windEndsAt = now+16000;
-        resetStableJump(); shell.dataset.action = "wind";
-        showFormCoach("wind", "腕と脚を連動させて2回、風の攻撃！");
-        missionText.textContent = "腕振り＋脚の曲げ伸ばし → 風の攻撃！";
-        setStatus("風を起こそう！", "腕を横へ＋ひざを曲げる → 腕を前で交差＋脚を伸ばす。2回続けよう");
-        recordResearchEvent("wind_start", { evaluation: "camera_rules_with_reference_when_available", durationMs: 16000 });
-      }
-
-      function windEffect() {
-        playSound("dodgeWhoosh", .75);
-        const effect = document.createElement("div");
-        effect.textContent = "🌬️  ≋≋≋";
-        Object.assign(effect.style, { position:"absolute", left:"8%", top:"55%", zIndex:15, color:"#53edff", fontSize:"clamp(36px,8vw,110px)", pointerEvents:"none" });
-        shell.appendChild(effect);
-        const animation = effect.animate([{transform:"translateX(0)",opacity:1},{transform:"translateX(600px)",opacity:0}],{duration:1000});
-        animation.onfinish = () => effect.remove();
-      }
-
-      function finishWind(now, result = null) {
-        if (!windActive) return;
-        windActive = false; windTracker.reset();
-        const success = result?.completed && result.quality >= 40;
-        const gained = success ? Math.round(80+result.quality*1.2) : 0;
-        if (success) { windAttacks++; score += gained; scoreLabel.textContent=String(score).padStart(4,"0"); windEffect(); enemyZone.classList.add("boss-hit"); }
-        recordResearchEvent("wind_finish", { success, gained, quality: result?.quality ?? null, cycles: result?.cycles ?? [], evaluation:"camera_rules_with_reference_when_available" });
-        announceOutcome(success ? "success" : "failure", success ? `風の攻撃！ ＋${gained}点` : "風の練習はここまで", "次は：両脚ジャンプ！");
-        nextWindAt=now+22000; nextObstacleAt=Math.max(nextObstacleAt,now+5500); nextBossAttackAt=Math.max(nextBossAttackAt,now+8500);
-        enemyReady=false;
-        const epoch=feedbackEpoch;
-        window.setTimeout(()=>{
-          if(gameMode!=="battle" || epoch!==feedbackEpoch)return;
-          enemyZone.classList.remove("boss-hit"); enemyReady=true;
-          nextJumpPrompt(); resetStableJump();
-        },1600);
-      }
-
-      function updateWind(lm, now) {
-        const result=sampleWind(lm,now);
-        const parts = result.cycles ? Object.keys(result.cycles[0].parts).map((key,i) =>
-          `${["腕","脚","左右差","姿勢","リズム","かかと"][i]} ${Math.round(result.cycles.reduce((sum,c)=>sum+c.parts[key],0)/2)}`).join("・") : "腕・脚・左右差・姿勢・リズムを評価";
-        const comparison = result.cycles ? result.cycles.map(c => c.referenceQuality === null ? "動画未取得：動作点のみ" : `動画一致 ${Math.round(c.referenceQuality)}点`).join(" / ") : "動作80%＋動画20%（動画取得時）";
-        setFormQuality(result.quality, `${parts}｜${comparison}。${result.hint}`);
-        if(gameMode==="tutorial") tutorialCue.textContent=result.hint;
-        else setStatus("風の攻撃にチャレンジ", result.hint);
-        if(result.completed){
-          recordResearchEvent("wind_cycle_pair",result);
-          if(result.quality>=40){
-            if(gameMode==="tutorial")completeTutorialStage();
-            else finishWind(now,result);
-          }
-        }
-      }
 
       function createJumpTracker() {
         let s;
@@ -2893,7 +2740,6 @@
 
       function resetGameProgress() {
         battleMission=null; missionDeck=[]; missionRound=0; missionIndex=0; lastMission=null;
-        windTracker.reset(); windActive=false; nextWindAt=Infinity; windAttacks=0;
         feedbackEpoch += 1;
         actionTrackingLost = false;
         delete shell.dataset.action;
@@ -2944,8 +2790,6 @@
       }
 
       function resetCalibration() {
-        trainingWindQuality = null;
-        windTracker.reset();
         resetStableJump();
         resetTwistMotion();
         gameMode = "calibration";
@@ -3045,7 +2889,7 @@
         phaseSkipButton.disabled = false;
         phaseSkipButton.textContent = "身体調整をスキップして練習へ";
         trainingDots.forEach((dot, index) => dot.className = `training-dot${index === 0 ? " active" : ""}`);
-        trainingProgress.textContent = "HERO SCAN 0/4";
+        trainingProgress.textContent = "HERO SCAN 0/3";
         trainingTitle.textContent = "ヒーロースーツを調整中";
         trainingDescription.textContent = "正面を向き、頭から足先まで映したまま静止してください。";
         trainingCue.textContent = "まっすぐ立ってください";
@@ -3093,12 +2937,11 @@
       }
 
       function setTrainingStage(stage) {
-        windTracker.reset();
         trainingStage = stage;
         trainingLocked = false;
         phaseSkipButton.hidden = false;
         phaseSkipButton.disabled = false;
-        phaseSkipButton.textContent = stage < 3
+        phaseSkipButton.textContent = stage < 2
           ? "この練習をスキップして次へ"
           : "この練習をスキップして完了へ";
         if (stage === 1) {
@@ -3120,22 +2963,20 @@
         });
 
         const stages = [
-          ["1/4", "体をねじる運動", "脚を動かさず、腕を振りながら上体を左右へ2回ねじります。センサーありモードではIMUの回転速度も測ります。", "左右へ大きく、中央まで戻る"],
-          ["2/4", "ジャンプの練習", "無理のない高さで1回軽くジャンプします。姿勢の一致度やIMUの反応は成功条件にしません。", "1回軽くジャンプ"],
-          ["3/4", "斜め下に曲げ、胸を反らす運動", "両手を片方の足先へ近づけたあと、上体を起こして胸を開きます。センサーありモードではIMUの傾きも測ります。", "斜め下 → 胸を開く"],
-          ["4/4", "腕を振って脚を曲げ伸ばす運動", "お手本を見て、腕を横へ振りながら両ひざを軽く曲げ、前で交差して脚を伸ばしましょう。2回連動させます。この運動はカメラで評価します。", "腕を横へ＋曲げる → 前で交差＋伸ばす。2回やってみよう！"],
+          ["1/3", "体をねじる運動", "脚を動かさず、腕を振りながら上体を左右へ2回ねじります。センサーありモードではIMUの回転速度も測ります。", "左右へ大きく、中央まで戻る"],
+          ["2/3", "ジャンプの練習", "無理のない高さで1回軽くジャンプします。姿勢の一致度やIMUの反応は成功条件にしません。", "1回軽くジャンプ"],
+          ["3/3", "斜め下に曲げ、胸を反らす運動", "両手を片方の足先へ近づけたあと、上体を起こして胸を開きます。センサーありモードではIMUの傾きも測ります。", "斜め下 → 胸を開く"],
         ];
         const [progress, title, description, cue] = stages[stage];
-        shell.dataset.action = ["twist", "jump", "diagonal", "wind"][stage];
+        shell.dataset.action = ["twist", "jump", "diagonal"][stage];
         trainingProgress.textContent = `HERO SCAN ${progress}`;
         trainingTitle.textContent = title;
         trainingDescription.textContent = description;
         trainingCue.textContent = cue;
-        setReferenceMotion(["twist", "jump", "diagonal", "wind"][stage], [
+        setReferenceMotion(["twist", "jump", "diagonal"][stage], [
           "腕を振り、脚と腰を動かさず上体を左右へねじる",
           "両脚をそろえ、同時に跳んでやさしく着地する",
           "片足先へ斜め下に曲げ、起き上がって胸を大きく開く",
-          "腕と脚を連動させ、かかともリズムよく上下。無理に深くしゃがまないでね",
         ][stage]);
         setStatus(title, description);
         playSound("dataDisplay", 0.5);
@@ -3151,7 +2992,7 @@
         playSound("confirmPrimary", 0.55);
         window.setTimeout(() => {
           if (gameMode !== "training") return;
-          if (trainingStage < 3) setTrainingStage(trainingStage + 1);
+          if (trainingStage < 2) setTrainingStage(trainingStage + 1);
           else finishTraining();
         }, 850);
       }
@@ -3177,26 +3018,13 @@
         playSound("confirmSecondary", 0.52);
         window.setTimeout(() => {
           if (gameMode !== "training") return;
-          if (trainingStage < 3) setTrainingStage(trainingStage + 1);
+          if (trainingStage < 2) setTrainingStage(trainingStage + 1);
           else finishTraining();
         }, 350);
       }
 
       function updateTraining(lm, hipY, ankleY) {
         if (trainingLocked) return;
-        if (trainingStage === 3) {
-          const result = sampleWind(lm, performance.now());
-          setFormQuality(result.quality, `腕振り＋脚の曲げ伸ばしの練習｜${result.hint}`);
-          trainingCue.textContent = result.hint;
-          trainingFill.style.width = `${result.completed ? 100 : (result.completedCycles || 0)*50}%`;
-          if (result.completed) {
-            trainingWindQuality = Math.max(trainingWindQuality ?? 0, result.quality);
-            recordResearchEvent("training_wind_evaluation", { ...result, passed: result.quality >= 35 });
-            if (result.quality >= 35) completeTrainingStage();
-            else trainingCue.textContent = `動作評価${Math.round(result.quality)}点。35点を目指してもう一度！ 次へスキップもできます`;
-          }
-          return;
-        }
         const shoulderWidth = Math.max(Math.abs(lm[11].x - lm[12].x), 0.04);
         const shoulderY = average(lm[11].y, lm[12].y);
         const hipX = average(lm[23].x, lm[24].x);
@@ -3291,10 +3119,9 @@
           : "身体の相対サイズと動ける範囲、IMUの加速度・傾き・回転速度を個人別判定に反映します。";
         trainingCue.textContent = "準備完了！";
         referenceVideo.pause();
-        referenceCaption.textContent = "4種目の練習が終了しました（スキップした項目を含みます）";
+        referenceCaption.textContent = "3種目の練習が終了しました（スキップした項目を含みます）";
         trainingFill.style.width = "100%";
         scanSummary.hidden = false;
-        document.querySelector("#scan-wind").textContent = trainingWindQuality === null ? "未測定（スキップ）" : `${Math.round(trainingWindQuality)}点（練習評価・本番基準は変更なし）`;
         trainingActions.hidden = false;
         phaseSkipButton.hidden = true;
         document.querySelector("#scan-shoulder").textContent = relativeLabel(baselineShoulderWidth);
@@ -3311,7 +3138,7 @@
           ? `カメラ ${Math.round(maxDiagonalBend * 100)}% / IMU ${maxTrainingBendAngle.toFixed(0)}°→${imuBendThreshold.toFixed(0)}°`
           : `${Math.round(maxDiagonalBend * 100)}%（カメラ）`;
         calibrationState.textContent = usedStandardSettings ? "標準設定を使用" : "個人調整済み";
-        setStatus("ヒーロースキャン完了", "「チュートリアルへ」を押して、4つのアクションを練習しましょう");
+        setStatus("ヒーロースキャン完了", "「チュートリアルへ」を押して、3つのアクションを練習しましょう");
         playSound("impactText", 0.6);
       }
 
@@ -3334,7 +3161,6 @@
       }
 
       function clearTutorialObjects() {
-        windTracker.reset(); windActive=false;
         enemyZone.className = "enemy-zone";
         obstacleZone.className = "obstacle-zone";
         obstacleZone.setAttribute("aria-hidden", "true");
@@ -3350,7 +3176,7 @@
         resetTwistMotion();
         tutorialNextButton.hidden = false;
         tutorialNextButton.disabled = false;
-        tutorialNextButton.textContent = stage < 3 ? "次へ（できなくても進める）" : "練習を終える（できなくても進める）";
+        tutorialNextButton.textContent = stage < 2 ? "次へ（できなくても進める）" : "練習を終える（できなくても進める）";
         tutorialStage = stage;
         tutorialLocked = false;
         tutorialAirborne = false;
@@ -3383,15 +3209,10 @@
             description: "まず正面を向こう。足の位置を動かさず、腕を振って上体をねじろう。横に倒れないようにね。",
             cue: "腕を振る・腰を止める・横へ倒れない",
           },
-          {
-            icon: "🌬️", title: "いきいきウインド！ 腕と脚で風を起こす",
-            description: "腕を横に振りながら両ひざを軽く曲げ、腕を前で交差して脚を伸ばそう。かかとも腕に合わせて上下。2回続けてね。",
-            cue: "横へ振る＋曲げる → 前で交差＋伸ばす。無理に深くしゃがまないでね",
-          },
         ];
         const item = stages[stage];
-        shell.dataset.action = ["jump", "diagonal", "twist", "wind"][stage];
-        tutorialBadge.textContent = `あそびかた ${stage + 1}/4`;
+        shell.dataset.action = ["jump", "diagonal", "twist"][stage];
+        tutorialBadge.textContent = `あそびかた ${stage + 1}/3`;
         tutorialIcon.textContent = item.icon;
         tutorialTitle.textContent = item.title;
         tutorialDescription.textContent = item.description;
@@ -3422,10 +3243,6 @@
           missionText.textContent = "光る弾には上体ねじり！";
           setStatus("やってみよう：ねじり反射", "まず正面を向いてから、上体を左右どちらかへねじってください");
           playSound("bossWarning", 0.58);
-        } else {
-          showFormCoach("wind", "腕と脚を連動させて2回！");
-          missionText.textContent="腕振り＋脚の曲げ伸ばしで風の攻撃！";
-          setStatus("やってみよう：風の攻撃", item.cue);
         }
         playSound("dataDisplay", 0.45);
       }
@@ -3434,11 +3251,11 @@
         if (tutorialLocked) return;
         tutorialLocked = true;
         tutorialNextButton.disabled = true;
-        recordResearchEvent("tutorial_stage_success", { stage: tutorialStage + 1, action: ["jump", "diagonal_bend_chest_open", "twist", "wind"][tutorialStage], quality: currentFormQuality });
+        recordResearchEvent("tutorial_stage_success", { stage: tutorialStage + 1, action: ["jump", "diagonal_bend_chest_open", "twist"][tutorialStage], quality: currentFormQuality });
         tutorialDots[tutorialStage].className = "done";
         tutorialTitle.textContent = "できた！ 大成功！";
-        tutorialCue.textContent = [`両脚跳び ${currentFormQuality}%！`, `斜め下＋胸反らし ${currentFormQuality}%！`, `体のねじり ${currentFormQuality}%！`, `風の動作評価 ${currentFormQuality}点！`][tutorialStage];
-        const nextHint = ["次は：斜め下に曲げて、胸を開く", "次は：上体をねじって弾を返す", "次は：腕と脚を動かして風の攻撃", "次は：本番スタート！"][tutorialStage];
+        tutorialCue.textContent = [`両脚跳び ${currentFormQuality}%！`, `斜め下＋胸反らし ${currentFormQuality}%！`, `体のねじり ${currentFormQuality}%！`][tutorialStage];
+        const nextHint = ["次は：斜め下に曲げて、胸を開く", "次は：上体をねじって弾を返す", "次は：本番スタート！"][tutorialStage];
         tutorialDescription.textContent = nextHint;
         announceOutcome("success", "練習成功！", nextHint);
         playSound("confirmPrimary", 0.72);
@@ -3454,13 +3271,11 @@
           reflectZone.className = "reflect-zone incoming reflected";
           enemyZone.classList.add("boss-hit");
           playSound("reflect", 0.78);
-        } else {
-          windEffect(); enemyZone.classList.add("boss-hit");
         }
 
         window.setTimeout(() => {
           if (gameMode !== "tutorial") return;
-          if (tutorialStage < 3) showTutorialStage(tutorialStage + 1);
+          if (tutorialStage < 2) showTutorialStage(tutorialStage + 1);
           else finishTutorial();
         }, TUTORIAL_STAGE_DELAY_MS);
       }
@@ -3472,10 +3287,10 @@
         tutorialSkippedCount += 1;
         recordResearchEvent("tutorial_stage_skipped", {
           stage: tutorialStage + 1,
-          action: ["jump", "diagonal_bend_chest_open", "twist", "wind"][tutorialStage],
+          action: ["jump", "diagonal_bend_chest_open", "twist"][tutorialStage],
         });
         playSound("confirmSecondary", 0.52);
-        if (tutorialStage < 3) showTutorialStage(tutorialStage + 1);
+        if (tutorialStage < 2) showTutorialStage(tutorialStage + 1);
         else finishTutorial();
       }
 
@@ -3488,9 +3303,9 @@
         tutorialDots.forEach((dot) => { dot.className = "done"; });
         tutorialBadge.textContent = tutorialSkippedCount ? "チュートリアル終了！" : "チュートリアル クリア！";
         tutorialIcon.textContent = "🌟";
-        tutorialTitle.textContent = tutorialSkippedCount ? "本番へ進もう！" : "4つの動きをマスターしたよ！";
-        tutorialDescription.textContent = "両脚跳び、斜め下から胸を開く運動、体のねじり、腕振りと脚の曲げ伸ばしを使い分けます。風の攻撃は動作評価40点以上が目標です。";
-        tutorialCue.textContent = "ジャンプは1回跳べばOK！ 回避55点、ねじり65点、風40点が目標！";
+        tutorialTitle.textContent = tutorialSkippedCount ? "本番へ進もう！" : "3つの動きをマスターしたよ！";
+        tutorialDescription.textContent = "両脚跳び、斜め下から胸を開く運動、体のねじりを使い分けます。";
+        tutorialCue.textContent = "ジャンプは1回跳べばOK！ 回避55点、ねじり65点が目標！";
         tutorialStartButton.hidden = false;
         missionText.textContent = tutorialSkippedCount ? "チュートリアル終了！" : "チュートリアルクリア！";
         setStatus("準備OK！", "「本番スタート！」を押すと1分間のバトルが始まります");
@@ -3499,7 +3314,6 @@
 
       function updateTutorial(lm, now, hipRise, ankleRise, hipVelocity) {
         if (tutorialLocked) return;
-        if (tutorialStage === 3) { updateWind(lm, now); return; }
 
         if (tutorialStage === 0) {
           const jump = sampleSimpleJump(lm, now);
@@ -3562,16 +3376,16 @@
         battleTimer.textContent = "01:00";
         timerCard.classList.remove("warning");
         finishBattleButton.hidden = false;
-        nextObstacleAt = nextBossAttackAt = nextWindAt = Infinity;
+        nextObstacleAt = nextBossAttackAt = Infinity;
         missionDeck=[]; missionRound=0; missionIndex=0; lastMission=null;
         prepareBattleMission(now);
         playSound("swordDraw", 0.68);
       }
 
       function shuffledMissions(previous = null, random = Math.random) {
-        const deck=["jump","diagonal","twist","wind"];
+        const deck=["jump","diagonal","twist"];
         for(let i=deck.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[deck[i],deck[j]]=[deck[j],deck[i]];}
-        if(deck[0]===previous){const j=1+Math.floor(random()*3);[deck[0],deck[j]]=[deck[j],deck[0]];}
+        if(deck[0]===previous){const j=1+Math.floor(random()*(deck.length-1));[deck[0],deck[j]]=[deck[j],deck[0]];}
         return deck;
       }
       let missionDeck=[],missionRound=0,missionIndex=0,lastMission=null,battleMission=null;
@@ -3579,7 +3393,6 @@
         jump:["道をふさぐカチコチモンスターをほぐそう！","元気スタンプ：1回軽くジャンプ"],
         diagonal:["魔王の壁をかわして、街への道を開こう！","のびのびバリア：斜め下へ曲げる → 胸を開く"],
         twist:["街をねらう魔法を、魔王へ跳ね返そう！","くるっとリフレクト：正面から上体をねじる"],
-        wind:["暗い雲を吹き飛ばして、空を明るくしよう！","いきいきウインド：腕振り＋脚の曲げ伸ばしを2回"],
       };
       function prepareBattleMission(now){
         if(!missionDeck.length){
@@ -3591,7 +3404,7 @@
         battleMission={kind,phase:"preview",until:now+3000,startScore:score};
         shell.dataset.action=kind;
         showFormCoach(kind,missionStories[kind][1]);
-        missionText.textContent=`街を救う旅 ${missionRound}章・${missionIndex}/4`;
+        missionText.textContent=`街を救う旅 ${missionRound}章・${missionIndex}/3`;
         setStatus(`📻 ラジ「${missionStories[kind][0]}」`, `次は ${missionStories[kind][1]}。お手本を見て準備しよう！`);
         recordResearchEvent("mission_preview",{round:missionRound,index:missionIndex,action:kind});
       }
@@ -3604,25 +3417,23 @@
         if(m.phase==="preview"){
           if(now<m.until)return;
           m.phase="active";resetStableJump();
-          const duration={jump:12000,diagonal:OBSTACLE_TIMEOUT_MS,twist:REFLECT_TIMEOUT_MS,wind:16000}[m.kind];
+          const duration={jump:12000,diagonal:OBSTACLE_TIMEOUT_MS,twist:REFLECT_TIMEOUT_MS}[m.kind];
           m.until=now+duration;
           if(m.kind==="diagonal")startObstacle(now);
           else if(m.kind==="twist")startBossAttack(now);
-          else if(m.kind==="wind")startWind(now);
           else {missionText.textContent=missionStories.jump[0];setStatus("元気スタンプ！", "1回軽くジャンプしよう！");}
           recordResearchEvent("mission_start",{round:missionRound,index:missionIndex,action:m.kind,durationMs:duration});
         }
         if(now>=m.until){
           if(m.kind==="diagonal"&&!obstacleResolved)finishObstacle(false);
           if(m.kind==="twist"&&!bossAttackResolved)finishBossAttack(false);
-          if(m.kind==="wind"&&windActive)finishWind(now);
         }
-        const done=m.kind==="jump" ? !enemyReady||now>=m.until : m.kind==="diagonal" ? obstacleResolved : m.kind==="twist" ? bossAttackResolved : !windActive;
+        const done=m.kind==="jump" ? !enemyReady||now>=m.until : m.kind==="diagonal" ? obstacleResolved : bossAttackResolved;
         if(!done)return;
         const success=score>m.startScore;
         m.phase="cooldown";m.until=now+2300;lastMission=m.kind;
         const next=missionDeck[0];
-        const detail=next ? `次は ${missionStories[next][1]}` : "4つの挑戦が終了！ ラジと次の通りへ進もう。次の章も順番が変わるよ！";
+        const detail=next ? `次は ${missionStories[next][1]}` : "3つの挑戦が終了！ ラジと次の通りへ進もう。次の章も順番が変わるよ！";
         announceOutcome(success?"success":"retry",success?`街の元気 ＋${score-m.startScore}点！` : "今回はここまで。次の挑戦へ！",detail);
         recordResearchEvent("mission_finish",{round:missionRound,index:missionIndex,action:m.kind,success,points:score-m.startScore});
         if(!next)recordResearchEvent("mission_round_complete",{round:missionRound});
@@ -3630,7 +3441,7 @@
 
       function storyProgress(points) {
         const level = points >= 300 ? 3 : points >= 150 ? 2 : points >= 50 ? 1 : 0;
-        return { level, message: ["街はまだ静か。4つの体操の力を集めよう！", "街灯がついたよ！ 街にあたたかさが戻ってきた。", "花が咲いたよ！ みんなの元気が戻ってきた。", "街に朝が戻ったよ！ ここからも無理なく動こう！"][level] };
+        return { level, message: ["街はまだ静か。3つの体操の力を集めよう！", "街灯がついたよ！ 街にあたたかさが戻ってきた。", "花が咲いたよ！ みんなの元気が戻ってきた。", "街に朝が戻ったよ！ ここからも無理なく動こう！"][level] };
       }
 
       let storyViewKey = "";
@@ -3648,17 +3459,16 @@
           jump:"元気スタンプ ／ 両脚で跳ぶ運動",
           diagonal:"のびのびバリア ／ 体を斜め下に曲げ胸を反らす運動",
           twist:"くるっとリフレクト ／ 体をねじる運動",
-          wind:"いきいきウインド ／ 腕を振って脚を曲げ伸ばす運動",
         };
         const phases = {
           top:"📻 ラジ「一緒に街の元気を取り戻そう！」",
           calibration:"ヒーロースーツを体に合わせています。正面で静止しよう。",
           training:"スーツの動作確認中。無理のない範囲で練習しよう。",
-          summary:"スーツの準備完了！ 次は4つの技の練習だ。",
+          summary:"スーツの準備完了！ 次は3つの技の練習だ。",
           "tutorial-complete":"準備OK！ 1分間、街の元気を集めよう。",
           result:"📻 ラジ「力を貸してくれてありがとう！」",
         };
-        document.querySelector("#story-skill").textContent = phases[gameMode] || skills[action] || "4つの体操の力で街を助けよう！";
+        document.querySelector("#story-skill").textContent = phases[gameMode] || skills[action] || "3つの体操の力で街を助けよう！";
       }
 
       function updateBattleClock(now) {
@@ -3666,7 +3476,6 @@
         if (gameMode === "battle") {
           const remaining = battleEndsAt - now;
           if(remaining>0)updateBattleMission(now);
-          if (windActive && now >= windEndsAt) finishWind(now);
           battleTimer.textContent = formatTime(remaining);
           timerCard.classList.toggle("warning", remaining <= 30000);
           if (remaining <= 0) finishBattle(now);
@@ -3680,8 +3489,7 @@
 
       function finishBattle(now = performance.now(), reason = "time") {
         if (gameMode !== "battle") return;
-        recordResearchEvent("battle_finish", { reason, score, rank: getScoreRank(score).rank, defeats, avoided, reflectedAttacks, windAttacks });
-        windActive=false; windTracker.reset();
+        recordResearchEvent("battle_finish", { reason, score, rank: getScoreRank(score).rank, defeats, avoided, reflectedAttacks });
         gameMode = "result";
         hideFormCoach();
         finishBattleButton.hidden = true;
@@ -3722,7 +3530,6 @@
         resultDefeats.textContent = String(defeats);
         resultAvoids.textContent = String(avoided);
         resultReflects.textContent = String(reflectedAttacks);
-        document.querySelector("#result-wind").textContent = String(windAttacks);
         resultReturnAt = now + RESULT_DISPLAY_MS;
         returnCountdown.textContent = "10";
         resultOverlay.classList.remove("hidden");
@@ -3797,7 +3604,6 @@
         previousFrameAt = now;
 
         if (!fullBodyVisible(lm)) {
-          windTracker.reset();
           if (obstacleActive || bossAttackActive) actionTrackingLost = true;
           resetStableJump();
           jumpFusionState.textContent = "足先まで映してください（ジャンプ判定を一時停止）";
@@ -3868,7 +3674,6 @@
         if (gameMode !== "battle") return;
 
         if (battleMission?.phase !== "active") return;
-        if (windActive) { updateWind(lm, now); return; }
 
         if (updateBossAttack(lm, now)) {
           if (!airborne && Math.abs(hipRise) < 0.014) {
@@ -4311,7 +4116,6 @@
             updateJumpDetector(lm);
           } else {
             if (obstacleActive || bossAttackActive) actionTrackingLost = true;
-            windTracker.reset();
             if (gameMode === "battle" || gameMode === "tutorial") announceOutcome("tracking", "身体を見失いました", "足先までカメラに映してください");
             resetStableJump();
             resetTwistMotion();
