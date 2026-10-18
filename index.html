@@ -1308,6 +1308,7 @@
         <div class="top-actions">
           <button id="fullscreen-button" class="sound-toggle" type="button">全画面表示</button>
           <button id="sound-toggle" class="sound-toggle" type="button" aria-pressed="true">効果音 ON</button>
+          <button id="voice-toggle" class="sound-toggle" type="button" aria-pressed="true" aria-label="音声案内 ON">音声案内 ON</button>
           <div id="connection" class="connection" aria-live="polite">
             <i class="connection-dot"></i>
             <span id="connection-label">カメラ未接続</span>
@@ -1746,6 +1747,27 @@
         return [name, audio];
       }));
       let soundEnabled = true;
+      let voiceEnabled = true, activeVoice = null, voiceTimer = null, voiceGeneration = 0;
+      function stopVoice() {
+        voiceGeneration++;
+        window.clearTimeout(voiceTimer);
+        voiceTimer = null;
+        if (activeVoice) { activeVoice.pause(); activeVoice.currentTime = 0; activeVoice = null; }
+      }
+      function playVoice(name, delay = 0) {
+        stopVoice();
+        if (!voiceEnabled) return;
+        const generation = voiceGeneration;
+        const start = () => {
+          if (!voiceEnabled || generation !== voiceGeneration) return;
+          const audio = new Audio("assets/voice/" + name + ".mp3");
+          activeVoice = audio;
+          audio.volume = .9;
+          audio.play().catch(() => { if (activeVoice === audio) activeVoice = null; });
+        };
+        if (delay) voiceTimer = window.setTimeout(start, delay);
+        else start();
+      }
       let researchConsent = null;
       let researchSession = null;
       let researchDownloaded = false;
@@ -2295,6 +2317,8 @@
       }
       let actionTrackingLost = false;
       function announceOutcome(kind, title, detail) {
+        if (kind === "success" && /^(反射成功|回避成功|撃破成功|練習成功)/.test(title)) playVoice("success");
+        else if (kind === "retry" && title.startsWith("今回はここまで")) playVoice("next");
         if(gameMode==="battle" && battleMission && detail.includes("次は：両脚ジャンプ")) {
           const next=missionDeck[0];
           detail=detail.replace(/次は：両脚ジャンプ[！]?/g,next ? `次は：${missionStories[next][1]}` : "3つの挑戦が終了！ 次の章へ進もう");
@@ -2854,6 +2878,7 @@
       }
 
       function resetCalibration() {
+        playVoice("stand");
         resetStableJump();
         resetTwistMotion();
         gameMode = "calibration";
@@ -3012,6 +3037,7 @@
       }
 
       function setTrainingStage(stage) {
+        playVoice(["twist-now", "jump-now", "bend-next"][stage]);
         trainingStage = stage;
         trainingLocked = false;
         phaseSkipButton.hidden = false;
@@ -3058,6 +3084,7 @@
       }
 
       function completeTrainingStage() {
+        playVoice("success");
         if (trainingLocked) return;
         trainingLocked = true;
         phaseSkipButton.disabled = true;
@@ -3073,6 +3100,7 @@
       }
 
       function skipCurrentAdjustment() {
+        stopVoice();
         if (gameMode === "calibration") {
           applyCalibrationBaseline();
           calibrationSkipped = true;
@@ -3147,7 +3175,7 @@
         const downForm = downLeft.quality >= downRight.quality ? downLeft : downRight;
         setFormQuality(downForm.quality, downForm.details);
         maxDiagonalBend = Math.max(maxDiagonalBend, shoulderDrop);
-        if (!diagonalDownSeen && shoulderDrop > 0.16 && diagonalOffset > 0.20 && downForm.quality >= 50) diagonalDownSeen = true;
+        if (!diagonalDownSeen && shoulderDrop > 0.16 && diagonalOffset > 0.20 && downForm.quality >= 50) { diagonalDownSeen = true; playVoice("chest-open"); }
 
         if (!diagonalDownSeen) {
           const progress = Math.min(Math.max(shoulderDrop / 0.16, diagonalOffset / 0.20), 1) * 50;
@@ -3248,6 +3276,7 @@
       }
 
       function showTutorialStage(stage) {
+        playVoice(["jump-now", "bend-right", "twist-now"][stage]);
         resetTwistMotion();
         tutorialNextButton.hidden = false;
         tutorialNextButton.disabled = false;
@@ -3356,6 +3385,7 @@
       }
 
       function skipTutorialStage() {
+        stopVoice();
         if (gameMode !== "tutorial" || tutorialLocked) return;
         tutorialLocked = true;
         tutorialNextButton.disabled = true;
@@ -3408,6 +3438,7 @@
             if (down.quality >= DODGE_PASS_SCORE && (!imuFresh || imuRecent)) {
               diagonalDownQuality = down.quality;
               diagonalDownSeenAt = now;
+              playVoice("chest-open");
               tutorialCue.textContent = "次は起き上がって、ひじを伸ばし胸を開く！";
             }
           } else {
@@ -3477,6 +3508,7 @@
         const kind=missionDeck.shift();missionIndex++;
         clearTutorialObjects();resetStableJump();enemyReady=true;
         battleMission={kind,phase:"preview",until:now+3000,startScore:score};
+        playVoice({jump:"jump-next",diagonal:"bend-next",twist:"twist-next"}[kind]);
         shell.dataset.action=kind;
         showFormCoach(kind,missionStories[kind][1]);
         missionText.textContent=`街を救う旅 ${missionRound}章・${missionIndex}/3`;
@@ -3496,7 +3528,7 @@
           m.until=now+duration;
           if(m.kind==="diagonal")startObstacle(now);
           else if(m.kind==="twist")startBossAttack(now);
-          else {missionText.textContent=missionStories.jump[0];setStatus("元気スタンプ！", "1回軽くジャンプしよう！");}
+          else {missionText.textContent=missionStories.jump[0];setStatus("元気スタンプ！", "1回軽くジャンプしよう！");playVoice("jump-now");}
           recordResearchEvent("mission_start",{round:missionRound,index:missionIndex,action:m.kind,durationMs:duration});
         }
         if(now>=m.until){
@@ -3599,6 +3631,7 @@
 
       function finishBattle(now = performance.now(), reason = "time") {
         clearScorePopup();
+        playVoice("finish");
         if (gameMode !== "battle") return;
         recordResearchEvent("battle_finish", { reason, score, rank: getScoreRank(score).rank, defeats, avoided, reflectedAttacks });
         gameMode = "result";
@@ -3653,6 +3686,7 @@
       }
 
       function returnToTop() {
+        stopVoice();
         window.clearTimeout(returnTopTimer);
         returnTopTimer = null;
         renderLoopActive = false;
@@ -3876,6 +3910,7 @@
           if (elapsed >= OBSTACLE_CHECK_DELAY_MS && downOk) {
             diagonalDownQuality = down.quality;
             diagonalDownSeenAt = now;
+            playVoice("chest-open");
             setStatus("前半OK！", "上体を起こし、ひじを伸ばして胸を大きく開いてください");
           }
         } else if (elapsed >= OBSTACLE_TIMEOUT_MS) {
@@ -3936,6 +3971,7 @@
       }
 
       function startBossAttack(now) {
+        playVoice("twist-now", REFLECT_CHECK_DELAY_MS);
         actionTrackingLost = false;
         shell.dataset.action = "twist";
         resetTwistMotion();
@@ -4010,6 +4046,7 @@
         bestObstacleQuality = 0;
         obstacleSide = Math.random() < 0.5 ? "left" : "right";
         const requiredLabel = obstacleSide === "left" ? "右" : "左";
+        playVoice(obstacleSide === "left" ? "bend-right" : "bend-left");
         const incomingLabel = obstacleSide === "left" ? "左" : "右";
         obstacleZone.className = `obstacle-zone from-${obstacleSide}`;
         obstacleZone.setAttribute("aria-hidden", "false");
@@ -4259,6 +4296,15 @@
       });
       startButton.addEventListener("click", startGame);
       soundToggle.addEventListener("click", toggleSound);
+      document.querySelector("#voice-toggle").addEventListener("click", (event) => {
+        voiceEnabled = !voiceEnabled;
+        stopVoice();
+        const label = voiceEnabled ? "音声案内 ON" : "音声案内 OFF";
+        event.currentTarget.textContent = label;
+        event.currentTarget.setAttribute("aria-label", label);
+        event.currentTarget.setAttribute("aria-pressed", String(voiceEnabled));
+        event.currentTarget.classList.toggle("muted", !voiceEnabled);
+      });
       recalibrateButton.addEventListener("click", () => {
         playSound("confirmSecondary", 0.52);
         resetCalibration();
