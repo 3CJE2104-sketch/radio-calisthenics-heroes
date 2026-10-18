@@ -1758,12 +1758,24 @@
         stopVoice();
         if (!voiceEnabled) return;
         const generation = voiceGeneration;
+        const queue = Array.isArray(name) ? [...name] : [name];
         const start = () => {
           if (!voiceEnabled || generation !== voiceGeneration) return;
-          const audio = new Audio("assets/voice/" + name + ".mp3");
+          const clip = queue.shift();
+          if (!clip) { activeVoice = null; return; }
+          const audio = new Audio("assets/voice/" + clip + ".mp3");
           activeVoice = audio;
           audio.volume = .9;
-          audio.play().catch(() => { if (activeVoice === audio) activeVoice = null; });
+          let completed = false;
+          const advance = () => {
+            if (completed || generation !== voiceGeneration) return;
+            completed = true;
+            if (activeVoice === audio) activeVoice = null;
+            start();
+          };
+          audio.onended = advance;
+          audio.onerror = advance;
+          audio.play().catch(advance);
         };
         if (delay) voiceTimer = window.setTimeout(start, delay);
         else start();
@@ -2878,7 +2890,7 @@
       }
 
       function resetCalibration() {
-        playVoice("stand");
+        playVoice(["raji-intro", "stand"]);
         resetStableJump();
         resetTwistMotion();
         gameMode = "calibration";
@@ -3037,7 +3049,7 @@
       }
 
       function setTrainingStage(stage) {
-        playVoice(["twist-now", "jump-now", "bend-next"][stage]);
+        playVoice(stage === 0 && !calibrationSkipped ? ["suit-ready", "twist-now"] : ["twist-now", "jump-now", "bend-next"][stage]);
         trainingStage = stage;
         trainingLocked = false;
         phaseSkipButton.hidden = false;
@@ -3400,6 +3412,7 @@
       }
 
       function finishTutorial() {
+        playVoice("story-ready");
         tutorialNextButton.hidden = true;
         gameMode = "tutorial-complete";
         hideFormCoach();
@@ -3483,6 +3496,7 @@
         timerCard.classList.remove("warning");
         finishBattleButton.hidden = false;
         nextObstacleAt = nextBossAttackAt = Infinity;
+        storyVoiceLevel = 0;
         missionDeck=[]; missionRound=0; missionIndex=0; lastMission=null;
         prepareBattleMission(now);
         playSound("swordDraw", 0.68);
@@ -3515,9 +3529,11 @@
         setStatus(`📻 ラジ「${missionStories[kind][0]}」`, `次は ${missionStories[kind][1]}。お手本を見て準備しよう！`);
         recordResearchEvent("mission_preview",{round:missionRound,index:missionIndex,action:kind});
       }
+      let storyVoiceLevel = 0;
       function updateBattleMission(now){
         const m=battleMission;if(!m)return;
         if(m.phase==="cooldown"){
+          if (m.storyVoiceUntil && activeVoice && now < m.storyVoiceUntil) return;
           if(now>=m.until)prepareBattleMission(now);
           return;
         }
@@ -3542,6 +3558,12 @@
         const next=missionDeck[0];
         const detail=next ? `次は ${missionStories[next][1]}` : "3つの挑戦が終了！ ラジと次の通りへ進もう。次の章も順番が変わるよ！";
         announceOutcome(success?"success":"retry",success?`街の元気 ＋${score-m.startScore}点！` : "今回はここまで。次の挑戦へ！",detail);
+        const level = score >= 300 ? 3 : score >= 150 ? 2 : score >= 50 ? 1 : 0;
+        if (level > storyVoiceLevel) {
+          storyVoiceLevel = level;
+          playVoice(["success", ["", "city-lights", "city-flowers", "city-morning"][level]]);
+          m.storyVoiceUntil = now + 12000;
+        }
         recordResearchEvent("mission_finish",{round:missionRound,index:missionIndex,action:m.kind,success,points:score-m.startScore});
         if(!next)recordResearchEvent("mission_round_complete",{round:missionRound});
       }
@@ -3631,7 +3653,7 @@
 
       function finishBattle(now = performance.now(), reason = "time") {
         clearScorePopup();
-        playVoice("finish");
+        playVoice([score >= 300 ? "hero-ending" : "adventure-ending", "finish"]);
         if (gameMode !== "battle") return;
         recordResearchEvent("battle_finish", { reason, score, rank: getScoreRank(score).rank, defeats, avoided, reflectedAttacks });
         gameMode = "result";
