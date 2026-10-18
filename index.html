@@ -1858,10 +1858,10 @@
       const DODGE_PASS_SCORE = 55;
       // Absolute total-score ranks, shared by timed and manually ended battles.
       const SCORE_RANKS = [
-        { rank: "S", minScore: 5000, title: "伝説のヒーロー！", color: "#ffe16b" },
-        { rank: "A", minScore: 3500, title: "すごうでヒーロー！", color: "#c7ff4f" },
-        { rank: "B", minScore: 2000, title: "頼れるヒーロー！", color: "#56e9ff" },
-        { rank: "C", minScore: 1000, title: "かけだしヒーロー！", color: "#c4b5fd" },
+        { rank: "S", minScore: 1000, title: "伝説のヒーロー！", color: "#ffe16b" },
+        { rank: "A", minScore: 750, title: "すごうでヒーロー！", color: "#c7ff4f" },
+        { rank: "B", minScore: 500, title: "頼れるヒーロー！", color: "#56e9ff" },
+        { rank: "C", minScore: 250, title: "かけだしヒーロー！", color: "#c4b5fd" },
         { rank: "D", minScore: 0, title: "ヒーローの第一歩！", color: "#d5e1f0" },
       ];
       function getScoreRank(totalScore) {
@@ -2613,21 +2613,30 @@
         }};
       }
       function createSimpleJumpTracker() {
-        let base=null, last=null, air=false, hits=0, groundSince=null;
-        const reset=()=>{base=null;last=null;air=false;hits=0;groundSince=null;};
+        let base=null, last=null, previousHip=null, air=false, riseSince=null, groundSince=null, readyAt=0;
+        const reset=()=>{base=null;last=null;previousHip=null;air=false;riseSince=null;groundSince=null;readyAt=0;};
         return {reset,update(p){
-          if(last!==null && p.now-last>300)reset();
+          if(!Number.isFinite(p.hip)){reset();return {detected:false,landed:false,rise:0};}
+          if(last!==null && (p.now-last>300 || p.now<=last))reset();
+          // Reject discontinuous tracking jumps; reacquire a resting reference.
+          if(previousHip!==null && Math.abs(p.hip-previousHip)>.12)reset();
           last=p.now;
-          if(!base){base={hip:p.hip,foot:p.foot};return {detected:false,landed:false,rise:0};}
-          const rise=base.hip-p.hip,feet=base.foot-p.foot;
-          const h=Math.max(.008,p.leg*.035),f=Math.max(.004,p.leg*.012);
+          previousHip=p.hip;
+          if(!base){base={hip:p.hip};readyAt=p.now+200;return {detected:false,landed:false,rise:0};}
+          const rise=base.hip-p.hip;
+          const h=Math.max(.008,(p.torso || .25)*.055);
           let detected=false,landed=false;
           if(!air){
-            hits=rise>=h && feet>=f ? hits+1 : 0;
-            if(hits>=2){air=true;detected=true;groundSince=null;}
-            else if(Math.abs(rise)<h*.6){base.hip=base.hip*.98+p.hip*.02;base.foot=base.foot*.98+p.foot*.02;}
+            if(p.now<readyAt){base.hip=p.hip;riseSince=null;}
+            else if(rise>=h){
+              riseSince??=p.now;
+              if(p.now-riseSince>=60){air=true;detected=true;groundSince=null;}
+            }else{
+              riseSince=null;
+              if(Math.abs(rise)<h*.6)base.hip=base.hip*.98+p.hip*.02;
+            }
           }else{
-            if(rise<h*.6 && feet<f){groundSince??=p.now;}else groundSince=null;
+            if(rise<h*.45){groundSince??=p.now;}else groundSince=null;
             if(groundSince!==null && p.now-groundSince>=80){landed=true;reset();}
           }
           return {detected,landed,rise};
@@ -2635,10 +2644,10 @@
       }
       const simpleJumpTracker=createSimpleJumpTracker();
       function sampleSimpleJump(lm,now){
-        const result=simpleJumpTracker.update({now,hip:average(lm[23].y,lm[24].y),foot:average(lm[27].y,lm[28].y),leg:Math.max(baselineLegLength,.12)});
+        const result=simpleJumpTracker.update({now,hip:average(lm[23].y,lm[24].y),torso:Math.max(baselineTorsoLength || .25,.10)});
         result.hint=result.detected ? "ジャンプできた！ やさしく着地しよう" : "1回軽くジャンプしよう（姿勢点・IMU条件なし）";
-        jumpFusionState.textContent="簡単ジャンプ：カメラのみ";
-        qualityBreakdown.textContent="ジャンプはお手本との一致度に関係なく成功します";
+        jumpFusionState.textContent="腰の上昇で判定（足・IMU条件なし）";
+        qualityBreakdown.textContent="腰が少し上がれば成功。足の座標・お手本一致度は条件にしません";
         return result;
       }
       const stableJumpTracker = createJumpTracker();
@@ -2925,6 +2934,17 @@
       function fullBodyVisible(lm) {
         const required = [11, 12, 23, 24, 27, 28];
         return required.every((index) => (lm[index].visibility ?? 0) > 0.55);
+      }
+
+      function hipJumpVisible(lm) {
+        return [11,12,23,24].every(i => lm[i] && Number.isFinite(lm[i].y) &&
+          (lm[i].visibility ?? 0) > .55 && lm[i].y >= 0 && lm[i].y <= 1);
+      }
+
+      function isHipJumpPhase() {
+        return (gameMode === "training" && trainingStage === 1) ||
+          (gameMode === "tutorial" && tutorialStage === 0) ||
+          (gameMode === "battle" && battleMission?.kind === "jump");
       }
 
       function average(a, b) { return (a + b) / 2; }
@@ -3586,7 +3606,7 @@
           : "最高ランク達成！";
         resultRankGuide.textContent = SCORE_RANKS.map(entry => entry.minScore
           ? `${entry.rank}：${entry.minScore.toLocaleString("ja-JP")}点〜`
-          : "D：0〜999点").join(" ／ ") + "（途中終了も同じ基準。ランクはゲーム内の活躍度で、体操の技能を認定するものではありません）";
+          : `D：0〜${SCORE_RANKS[SCORE_RANKS.length - 2].minScore - 1}点`).join(" ／ ") + "（途中終了も同じ基準。ランクはゲーム内の活躍度で、体操の技能を認定するものではありません）";
         resultDefeats.textContent = String(defeats);
         resultAvoids.textContent = String(avoided);
         resultReflects.textContent = String(reflectedAttacks);
@@ -3663,13 +3683,14 @@
         previousHipY = hipY;
         previousFrameAt = now;
 
-        if (!fullBodyVisible(lm)) {
+        const hipOnly = baselineHipY != null && isHipJumpPhase();
+        if (!(hipOnly ? hipJumpVisible(lm) : fullBodyVisible(lm))) {
           if (obstacleActive || bossAttackActive) actionTrackingLost = true;
           resetStableJump();
-          jumpFusionState.textContent = "足先まで映してください（ジャンプ判定を一時停止）";
+          jumpFusionState.textContent = hipOnly ? "肩と腰を確認中（判定を一時停止）" : "全身を確認中";
           resetTwistMotion();
           poseState.textContent = "全身を確認中";
-          setStatus("頭から足先まで映してください", "カメラから少し離れると判定しやすくなります");
+          setStatus(hipOnly ? "肩と腰を映してください" : "頭から足先まで映してください", hipOnly ? "ジャンプは足が見えなくても判定できます" : "カメラから少し離れると判定しやすくなります");
           return;
         }
 
@@ -3767,7 +3788,7 @@
         const imuJumpRecent = imuJumpFresh && now - imuJumpDetectedAt <= IMU_JUMP_HOLD_MS;
         const fusedJumpDetected = cameraJumpDetected;
 
-        jumpFusionState.textContent = "簡単ジャンプ：カメラのみ（IMU不要）";
+        jumpFusionState.textContent = "腰の上昇で判定（足・IMU条件なし）";
 
         if (!airborne && cooldownComplete && enemyReady && fusedJumpDetected) {
           airborne = true;
