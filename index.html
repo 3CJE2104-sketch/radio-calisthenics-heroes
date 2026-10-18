@@ -991,6 +991,15 @@
         pointer-events: none;
       }
 
+      .score-popup { position:absolute; left:24px; bottom:24%; z-index:12; pointer-events:none;
+        padding:12px 20px; border:2px solid #c7ff4f; border-radius:16px;
+        background:rgba(5,18,30,.92); color:#fff; font-weight:800;
+        font-size:clamp(16px,2vw,26px); max-width:calc(100% - 48px); }
+      .score-popup[hidden] { display:none; }
+      .score-popup strong { display:block; color:#c7ff4f; font-size:clamp(28px,3.5vw,48px); }
+      .score-popup.show { animation:score-rise 1.25s ease-out both; }
+      @keyframes score-rise { 0% {opacity:0;transform:translateY(12px);} 15%,75% {opacity:1;} 100% {opacity:0;transform:translateY(-18px);} }
+      @media (prefers-reduced-motion:reduce) { .score-popup.show {animation:none;} }
       .impact-text.show { animation: impact .75s cubic-bezier(.15,.85,.2,1); }
       .impact-text.dodge { color: var(--cyan); text-shadow: 0 0 18px rgba(83,237,255,.8), 0 8px 0 rgba(21, 59, 85, .65); }
 
@@ -1357,6 +1366,7 @@
 
           <button id="finish-battle-button" class="finish-battle-button" type="button" hidden>ここまでの結果を見る</button>
 
+          <div id="score-popup" class="score-popup" role="status" aria-live="polite" aria-atomic="true" hidden><span id="score-popup-label"></span><strong id="score-popup-points"></strong></div>
           <div id="impact-text" class="impact-text" aria-hidden="true">STOMP!</div>
 
           <div id="consent-overlay" class="consent-overlay" aria-live="polite">
@@ -2264,6 +2274,25 @@
       }
 
       let feedbackEpoch = 0;
+      let scorePopupTimer = null;
+      function clearScorePopup() {
+        window.clearTimeout(scorePopupTimer);
+        scorePopupTimer = null;
+        const popup = document.querySelector("#score-popup");
+        popup.hidden = true;
+        popup.classList.remove("show");
+      }
+      function showScorePopup(action, points) {
+        if (gameMode !== "battle" || !Number.isFinite(points) || points <= 0) return;
+        clearScorePopup();
+        const popup = document.querySelector("#score-popup");
+        document.querySelector("#score-popup-label").textContent = action + "成功！";
+        document.querySelector("#score-popup-points").textContent = "＋" + points.toLocaleString("ja-JP") + "点";
+        popup.hidden = false;
+        void popup.offsetWidth;
+        popup.classList.add("show");
+        scorePopupTimer = window.setTimeout(clearScorePopup, 1250);
+      }
       let actionTrackingLost = false;
       function announceOutcome(kind, title, detail) {
         if(gameMode==="battle" && battleMission && detail.includes("次は：両脚ジャンプ")) {
@@ -2773,6 +2802,7 @@
       }
 
       function resetGameProgress() {
+        clearScorePopup();
         battleMission=null; missionDeck=[]; missionRound=0; missionIndex=0; lastMission=null;
         feedbackEpoch += 1;
         actionTrackingLost = false;
@@ -3568,6 +3598,7 @@
       }
 
       function finishBattle(now = performance.now(), reason = "time") {
+        clearScorePopup();
         if (gameMode !== "battle") return;
         recordResearchEvent("battle_finish", { reason, score, rank: getScoreRank(score).rank, defeats, avoided, reflectedAttacks });
         gameMode = "result";
@@ -3934,6 +3965,7 @@
         if (success) {
           score += gained;
           reflectedAttacks += 1;
+          showScorePopup("反射", gained);
           scoreLabel.textContent = String(score).padStart(4, "0");
           reflectCountLabel.textContent = String(reflectedAttacks);
           reflectZone.classList.add("reflected");
@@ -4001,6 +4033,7 @@
         if (success) {
           score += gained;
           avoided += 1;
+          showScorePopup("回避", gained);
           scoreLabel.textContent = String(score).padStart(4, "0");
           avoidCountLabel.textContent = String(avoided);
           obstacleZone.classList.add("avoided");
@@ -4039,6 +4072,7 @@
         recordResearchEvent("jump_attack_success", { evaluation:"simple_jump", points: gained });
         score += gained;
         defeats += 1;
+        showScorePopup("ジャンプ", gained);
         scoreLabel.textContent = String(score).padStart(4, "0");
         defeatCountLabel.textContent = String(defeats);
         enemyZone.classList.add("defeated");
