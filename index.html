@@ -228,6 +228,18 @@
       .timer-card b { font-size: 1.45rem; line-height: 1; color: var(--cyan); font-variant-numeric: tabular-nums; }
       .timer-card.warning { border-color: rgba(255,100,138,.7); animation: warning-pulse .55s ease-in-out infinite alternate; }
       .timer-card.warning b { color: #ff8cab; }
+      .battle-time-track { position:absolute; top:0; left:0; right:0; height:12px;
+        z-index:20; background:rgba(2,8,20,.85); pointer-events:none; overflow:hidden; }
+      .battle-time-track[hidden] { display:none; }
+      .battle-time-fill { width:100%; height:100%; transform-origin:left center;
+        background:#56e9ff; transition:transform .1s linear,background .3s; }
+      .battle-time-track[data-state="warning"] .battle-time-fill { background:#ffd166; }
+      .battle-time-track[data-state="urgent"] .battle-time-fill { background:#ff648a; }
+      .battle-time-track[data-paused="true"] .battle-time-fill {
+        background:repeating-linear-gradient(90deg,#56e9ff 0 16px,#a7f3ff 16px 24px); }
+      .timer-paused { display:block; font-size:.65rem; color:#a7f3ff; }
+      .timer-paused[hidden] { display:none; }
+      @media (prefers-reduced-motion:reduce) { .battle-time-fill {transition:none;} }
 
       .enemy-zone {
         position: absolute;
@@ -1318,6 +1330,7 @@
 
       <section class="layout">
         <div id="game-shell" class="game-shell">
+          <div id="battle-time-track" class="battle-time-track" role="progressbar" aria-label="本番の残り時間" aria-valuemin="0" aria-valuemax="60" aria-valuenow="60" hidden><div id="battle-time-fill" class="battle-time-fill"></div></div>
           <div class="camera-stage">
             <video id="camera" playsinline muted></video>
             <canvas id="pose-canvas"></canvas>
@@ -1352,6 +1365,7 @@
                 <div id="timer-card" class="timer-card">
                   <span class="eyebrow">TIME</span>
                   <b id="battle-timer">01:00</b>
+                  <small id="timer-paused" class="timer-paused" hidden>準備中・時間停止</small>
                 </div>
                 <div class="score-card">
                   <span class="eyebrow">SCORE</span>
@@ -3692,7 +3706,22 @@
         document.querySelector("#story-skill").textContent = phases[gameMode] || skills[action] || "3つの体操の力で街を助けよう！";
       }
 
+      function updateTimeBar(remaining, paused) {
+        const track=document.querySelector("#battle-time-track");
+        const fill=document.querySelector("#battle-time-fill");
+        const pauseLabel=document.querySelector("#timer-paused");
+        const seconds=Math.max(0,Math.min(BATTLE_DURATION_MS,remaining))/1000;
+        track.hidden=gameMode!=="battle";
+        fill.style.transform=`scaleX(${seconds/(BATTLE_DURATION_MS/1000)})`;
+        track.dataset.state=seconds<=10 ? "urgent" : seconds<=30 ? "warning" : "normal";
+        track.dataset.paused=String(paused);
+        track.setAttribute("aria-valuemax",String(BATTLE_DURATION_MS/1000));
+        track.setAttribute("aria-valuenow",String(Math.ceil(seconds)));
+        track.setAttribute("aria-valuetext",paused ? "準備中・時間停止" : `残り${Math.ceil(seconds)}秒`);
+        pauseLabel.hidden=!paused || gameMode!=="battle";
+      }
       function updateBattleClock(now) {
+        if (gameMode !== "battle") updateTimeBar(0, false);
         updateStory();
         document.querySelector("#skip-jump-ready").hidden=!(gameMode==="battle" && battleMission?.phase==="preparing");
         if (gameMode === "battle") {
@@ -3700,6 +3729,7 @@
             battleEndsAt+=Math.max(0,now-lastBattleClockAt);
           lastBattleClockAt=now;
           const remaining = battleEndsAt - now;
+          updateTimeBar(remaining, battleMission?.phase==="preparing");
           if(remaining>0)updateBattleMission(now);
           battleTimer.textContent = formatTime(remaining);
           timerCard.classList.toggle("warning", remaining <= 30000);
@@ -3718,6 +3748,7 @@
         if (gameMode !== "battle") return;
         recordResearchEvent("battle_finish", { reason, score, rank: getScoreRank(score).rank, defeats, avoided, reflectedAttacks });
         gameMode = "result";
+        updateTimeBar(0, false);
         hideFormCoach();
         finishBattleButton.hidden = true;
         battleTimer.textContent = "00:00";
