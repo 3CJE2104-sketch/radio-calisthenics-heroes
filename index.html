@@ -1365,6 +1365,7 @@
             </div>
           </div>
 
+          <button id="skip-jump-ready" class="sound-toggle" style="position:absolute;left:16px;bottom:12px;z-index:25" type="button" hidden>このジャンプをスキップ</button>
           <button id="finish-battle-button" class="finish-battle-button" type="button" hidden>ここまでの結果を見る</button>
 
           <div id="score-popup" class="score-popup" role="status" aria-live="polite" aria-atomic="true" hidden><span id="score-popup-label"></span><strong id="score-popup-points"></strong></div>
@@ -2678,46 +2679,92 @@
         }};
       }
       function createSimpleJumpTracker() {
-        let base=null, last=null, previousHip=null, air=false, riseSince=null, groundSince=null, readyAt=0;
-        const reset=()=>{base=null;last=null;previousHip=null;air=false;riseSince=null;groundSince=null;readyAt=0;};
+        let base=null, previous=null, stable=[], air=false, riseSince=null, groundSince=null, upAt=-Infinity, changedAt=null;
+        const reset=()=>{base=null;previous=null;stable=[];air=false;riseSince=null;groundSince=null;upAt=-Infinity;changedAt=null;};
         return {reset,update(p){
-          if(!Number.isFinite(p.hip)){reset();return {detected:false,landed:false,rise:0};}
-          if(last!==null && (p.now-last>300 || p.now<=last))reset();
-          // Reject discontinuous tracking jumps; reacquire a resting reference.
-          if(previousHip!==null && Math.abs(p.hip-previousHip)>.12)reset();
-          last=p.now;
-          previousHip=p.hip;
-          if(!base){base={hip:p.hip};readyAt=p.now+200;return {detected:false,landed:false,rise:0};}
-          const rise=base.hip-p.hip;
-          const h=Math.max(.008,(p.torso || .25)*.055);
+          const h=Math.max(.010,(p.torso || .25)*.06);
+          const empty={detected:false,landed:false,rise:0,threshold:h,ready:false};
+          if(!Number.isFinite(p.hip)||!Number.isFinite(p.shoulder)){reset();return empty;}
+          if(previous && (p.now<=previous.now || p.now-previous.now>300 ||
+            Math.abs(p.hip-previous.hip)>.12 || Math.abs(p.shoulder-previous.shoulder)>.12))reset();
+          const old=previous; previous={...p};
+          if(!base){
+            stable.push({...p});
+            while(stable.length>1 && p.now-stable[1].now>=420)stable.shift();
+            const spread=key=>Math.max(...stable.map(v=>v[key]))-Math.min(...stable.map(v=>v[key]));
+            if(spread("hip")>h*.3 || spread("shoulder")>h*.3)stable=[{...p}];
+            if(p.now-stable[0].now>=350){
+              base={hip:stable.reduce((a,v)=>a+v.hip,0)/stable.length,
+                shoulder:stable.reduce((a,v)=>a+v.shoulder,0)/stable.length};
+            }
+            return {...empty,ready:!!base};
+          }
+          const hipRise=base.hip-p.hip, shoulderRise=base.shoulder-p.shoulder;
+          const rise=Math.min(hipRise,shoulderRise);
+          const coherent=Math.abs(hipRise-shoulderRise)<=h*1.5;
+          if(old){
+            const dt=(p.now-old.now)/1000;
+            if((old.hip-p.hip)/dt>h*3 && (old.shoulder-p.shoulder)/dt>h*3)upAt=p.now;
+          }
           let detected=false,landed=false;
           if(!air){
-            if(p.now<readyAt){base.hip=p.hip;riseSince=null;}
-            else if(rise>=h){
+            if(rise>=h && coherent && p.now-upAt<=300){
               riseSince??=p.now;
               if(p.now-riseSince>=60){air=true;detected=true;groundSince=null;}
+            }else riseSince=null;
+            if(Math.abs(hipRise)<h*.4 && Math.abs(shoulderRise)<h*.4){
+              changedAt=null;
+              // Do not chase an upward movement while establishing its rise.
+              if(p.now-upAt>300){
+                base.hip=base.hip*.98+p.hip*.02;
+                base.shoulder=base.shoulder*.98+p.shoulder*.02;
+              }
             }else{
-              riseSince=null;
-              if(Math.abs(rise)<h*.6)base.hip=base.hip*.98+p.hip*.02;
+              changedAt??=p.now;
+              if(!air && p.now-changedAt>1800){reset();return empty;}
             }
           }else{
-            if(rise<h*.45){groundSince??=p.now;}else groundSince=null;
+            if(Math.abs(hipRise)<h*.5 && Math.abs(shoulderRise)<h*.5)groundSince??=p.now;
+            else groundSince=null;
             if(groundSince!==null && p.now-groundSince>=80){landed=true;reset();}
           }
-          return {detected,landed,rise};
+          return {detected,landed,rise,threshold:h,ready:true};
         }};
       }
       const simpleJumpTracker=createSimpleJumpTracker();
+      let jumpCueReady=false;
+      let lastBattleClockAt=null;
       function sampleSimpleJump(lm,now){
-        const result=simpleJumpTracker.update({now,hip:average(lm[23].y,lm[24].y),torso:Math.max(baselineTorsoLength || .25,.10)});
-        result.hint=result.detected ? "ジャンプできた！ やさしく着地しよう" : "1回軽くジャンプしよう（姿勢点・IMU条件なし）";
-        jumpFusionState.textContent="腰の上昇で判定（足・IMU条件なし）";
-        qualityBreakdown.textContent="腰が少し上がれば成功。足の座標・お手本一致度は条件にしません";
+        const result=simpleJumpTracker.update({now,hip:average(lm[23].y,lm[24].y),shoulder:average(lm[11].y,lm[12].y),torso:Math.max(baselineTorsoLength || .25,.10)});
+        if (!result.ready) jumpCueReady=false;
+        if (!jumpCueReady && result.detected) {
+          simpleJumpTracker.reset();
+          result.detected=false; result.ready=false;
+        }
+        if (result.ready && !jumpCueReady && !activeVoice && (gameMode !== "battle" || battleMission?.phase === "preparing")) {
+          jumpCueReady=true;
+          playVoice("jump-now");
+          setStatus("準備OK！ ジャンプ！", "肩と腰が一緒に上がるよう、軽く1回跳ぼう");
+          if (gameMode === "battle") {
+            battleMission.phase="active";
+            battleMission.until=now+12000;
+            document.querySelector("#skip-jump-ready").hidden=true;
+            recordResearchEvent("mission_start",{action:"jump",durationMs:12000});
+          }
+        }
+        result.hint=!jumpCueReady ? "まっすぐ立ってね。ジャンプの合図を待とう" : result.detected ? "ジャンプできた！ やさしく着地しよう" : "準備OK！ 軽く1回ジャンプしよう";
+        const ratio=Math.max(0,Math.min(result.rise/result.threshold,1.25));
+        jumpMeter.style.width=`${Math.min(ratio*100,100)}%`;
+        jumpValue.textContent=`${Math.round(ratio*100)}%`;
+        hipDeltaLabel.textContent=result.rise.toFixed(3);
+        jumpFusionState.textContent=result.ready ? "肩＋腰の上昇で判定（足不要）" : "静止して基準を確認中";
+        qualityBreakdown.textContent="肩と腰の同時上昇を確認。足の座標・姿勢点・IMUは必須ではありません";
         return result;
       }
       const stableJumpTracker = createJumpTracker();
       let stableJumpContext = "";
       function resetStableJump() {
+        jumpCueReady=false;
         simpleJumpTracker.reset();
         stableJumpTracker.reset();
         cameraJumpDetectedAt = -Infinity;
@@ -3049,7 +3096,7 @@
       }
 
       function setTrainingStage(stage) {
-        playVoice(stage === 0 && !calibrationSkipped ? ["suit-ready", "twist-now"] : ["twist-now", "jump-now", "bend-next"][stage]);
+        playVoice(stage === 0 && !calibrationSkipped ? ["suit-ready", "twist-now"] : ["twist-now", "stand-ready", "bend-next"][stage]);
         trainingStage = stage;
         trainingLocked = false;
         phaseSkipButton.hidden = false;
@@ -3288,7 +3335,7 @@
       }
 
       function showTutorialStage(stage) {
-        playVoice(["jump-now", "bend-right", "twist-now"][stage]);
+        playVoice(["stand-ready", "bend-right", "twist-now"][stage]);
         resetTwistMotion();
         tutorialNextButton.hidden = false;
         tutorialNextButton.disabled = false;
@@ -3479,6 +3526,7 @@
       }
 
       function beginBattle() {
+        lastBattleClockAt=performance.now();
         gameMode = "battle";
         feedbackEpoch += 1;
         shell.dataset.action = "jump";
@@ -3532,6 +3580,7 @@
       let storyVoiceLevel = 0;
       function updateBattleMission(now){
         const m=battleMission;if(!m)return;
+        if(m.phase==="preparing")return;
         if(m.phase==="cooldown"){
           if (m.storyVoiceUntil && activeVoice && now < m.storyVoiceUntil) return;
           if(now>=m.until)prepareBattleMission(now);
@@ -3539,7 +3588,15 @@
         }
         if(m.phase==="preview"){
           if(now<m.until)return;
-          m.phase="active";resetStableJump();
+          if(m.kind==="jump"){
+            m.phase="preparing";
+            resetStableJump();
+            setStatus("まっすぐ立ってね", "肩と腰が約0.35秒安定したら、ジャンプの合図が出ます");
+            playVoice("stand-ready");
+            document.querySelector("#skip-jump-ready").hidden=false;
+            return;
+          }
+          m.phase="active";
           const duration={jump:12000,diagonal:OBSTACLE_TIMEOUT_MS,twist:REFLECT_TIMEOUT_MS}[m.kind];
           m.until=now+duration;
           if(m.kind==="diagonal")startObstacle(now);
@@ -3637,7 +3694,11 @@
 
       function updateBattleClock(now) {
         updateStory();
+        document.querySelector("#skip-jump-ready").hidden=!(gameMode==="battle" && battleMission?.phase==="preparing");
         if (gameMode === "battle") {
+          if (battleMission?.phase==="preparing" && lastBattleClockAt!==null)
+            battleEndsAt+=Math.max(0,now-lastBattleClockAt);
+          lastBattleClockAt=now;
           const remaining = battleEndsAt - now;
           if(remaining>0)updateBattleMission(now);
           battleTimer.textContent = formatTime(remaining);
@@ -3761,7 +3822,7 @@
 
       function updateJumpDetector(lm) {
         const now = performance.now();
-        const context = [gameMode, trainingStage, tutorialStage, obstacleActive, bossAttackActive, enemyReady].join(":");
+        const context = [gameMode, trainingStage, tutorialStage, battleMission?.kind, missionRound, missionIndex].join(":");
         if (context !== stableJumpContext) { resetStableJump(); stableJumpContext = context; }
         const hipY = average(lm[23].y, lm[24].y);
         const ankleY = average(lm[27].y, lm[28].y);
@@ -3841,9 +3902,12 @@
 
         if (gameMode !== "battle") return;
 
-        if (battleMission?.phase !== "active") return;
+        if (battleMission?.phase !== "active") {
+          if (battleMission?.kind === "jump" && battleMission.phase === "preparing") sampleSimpleJump(lm, now);
+          return;
+        }
 
-        if (updateBossAttack(lm, now)) {
+        if (battleMission.kind !== "jump" && updateBossAttack(lm, now)) {
           if (!airborne && Math.abs(hipRise) < 0.014) {
             baselineHipY = baselineHipY * 0.997 + hipY * 0.003;
             baselineAnkleY = baselineAnkleY * 0.997 + ankleY * 0.003;
@@ -3853,9 +3917,9 @@
           return;
         }
 
-        updateBendDetector(lm, now);
+        if (battleMission.kind !== "jump") updateBendDetector(lm, now);
 
-        if (obstacleActive) {
+        if (battleMission.kind !== "jump" && obstacleActive) {
           if (!airborne && Math.abs(hipRise) < 0.014) {
             baselineHipY = baselineHipY * 0.997 + hipY * 0.003;
             baselineAnkleY = baselineAnkleY * 0.997 + ankleY * 0.003;
@@ -3875,7 +3939,7 @@
         const imuJumpRecent = imuJumpFresh && now - imuJumpDetectedAt <= IMU_JUMP_HOLD_MS;
         const fusedJumpDetected = cameraJumpDetected;
 
-        jumpFusionState.textContent = "腰の上昇で判定（足・IMU条件なし）";
+        jumpFusionState.textContent = jump.ready ? "肩＋腰の上昇で判定（足不要）" : "静止して基準を確認中";
 
         if (!airborne && cooldownComplete && enemyReady && fusedJumpDetected) {
           airborne = true;
@@ -4317,6 +4381,14 @@
           : "ゲーム開始時にブラウザが選んだカメラを使用します。";
       });
       startButton.addEventListener("click", startGame);
+      document.querySelector("#skip-jump-ready").addEventListener("click",()=>{
+        if(gameMode!=="battle" || battleMission?.phase!=="preparing")return;
+        playVoice("next");
+        battleMission.phase="cooldown";battleMission.until=performance.now()+1000;
+        lastMission=battleMission.kind;
+        document.querySelector("#skip-jump-ready").hidden=true;
+        recordResearchEvent("mission_skipped",{action:"jump",reason:"preparation"});
+      });
       soundToggle.addEventListener("click", toggleSound);
       document.querySelector("#voice-toggle").addEventListener("click", (event) => {
         voiceEnabled = !voiceEnabled;
