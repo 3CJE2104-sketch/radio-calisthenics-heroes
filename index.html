@@ -3512,6 +3512,8 @@
             if (down.quality >= DODGE_PASS_SCORE && (!imuFresh || imuRecent)) {
               diagonalDownQuality = down.quality;
               diagonalDownSeenAt = now;
+              obstacleZone.className = "obstacle-zone";
+              obstacleZone.setAttribute("aria-hidden", "true");
               playVoice("chest-open");
               tutorialCue.textContent = "次は起き上がって、ひじを伸ばし胸を開く！";
             }
@@ -4027,6 +4029,8 @@
           if (elapsed >= OBSTACLE_CHECK_DELAY_MS && downOk) {
             diagonalDownQuality = down.quality;
             diagonalDownSeenAt = now;
+            obstacleZone.className = "obstacle-zone";
+            obstacleZone.setAttribute("aria-hidden", "true");
             playVoice("chest-open");
             setStatus("前半OK！", "上体を起こし、ひじを伸ばして胸を大きく開いてください");
           }
