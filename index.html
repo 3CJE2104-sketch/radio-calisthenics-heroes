@@ -1872,7 +1872,7 @@
       let bossAttackStartedAt = 0;
       let nextBossAttackAt = Infinity;
       let reflectedAttacks = 0;
-      let twistReflectThreshold = 0.13;
+      let twistReflectThreshold = 0.14;
       let battleEndsAt = Infinity;
       let resultReturnAt = Infinity;
       let returnTopTimer = null;
@@ -1908,6 +1908,10 @@
       let bestTwistQuality = 0;
 
       const CALIBRATION_FRAMES = 42;
+      const URL_PARAMS = new URLSearchParams(location.search);
+      const POSE_MODEL = ["lite", "full", "heavy"].includes(URL_PARAMS.get("model")) ? URL_PARAMS.get("model") : "full";
+      const DEBUG_POSE = URL_PARAMS.has("debug");
+      let poseDelegate = "";
       const JUMP_HIP_THRESHOLD = 0.052;
       const JUMP_ANKLE_THRESHOLD = 0.018;
       const LANDING_THRESHOLD = 0.022;
@@ -1930,8 +1934,28 @@
       let twistNeutralCompression = null;
       let twistMotionSince = null;
       let twistMotionReady = false;
+      // --- 判定の安定化（2026-10-26） ---------------------------------------------
+      // 成功判定は「動作の核となる幾何量」だけで行い、一致度(quality)は得点と表示にだけ使う。
+      // 体の比率（肩幅÷胴の縦の長さ など）を使い、カメラとの距離が変わっても値がずれないようにする。
+      const POSE_VISIBILITY_MIN = 0.35;      // 判定に使う部位の最低可視性（旧: 全身0.55）
+      const TRACKING_GRACE_MS = 600;         // この時間までの一瞬の見失いは状態を保持する
+      const TWIST_THRESHOLD_DEFAULT = 0.14;  // 正面比での見かけの肩幅の縮み（約30〜35°のねじり）
+      const BEND_DEPTH_DEFAULT = 0.26;       // 胴の縦の長さの縮み（約40〜45°の前屈）
+      // 練習で動けた範囲から個人別の基準を決める。上限を低めにして「練習で頑張りすぎた子ほど
+      // 本番で厳しくなる」ことを防ぐ（旧：練習最大値の62%、上限0.18で上限に張り付きがち）。
+      function personalTwistThreshold(maxTwist) {
+        return maxTwist >= 0.10 ? Math.max(0.10, Math.min(maxTwist * 0.45, 0.16)) : TWIST_THRESHOLD_DEFAULT;
+      }
+      function personalBendThreshold(maxBend) {
+        return maxBend >= 0.22 ? Math.max(0.20, Math.min(maxBend * 0.4, 0.26)) : BEND_DEPTH_DEFAULT;
+      }
+      let baselineTwistRatio = null;         // 正面時の 肩幅 ÷ 胴の縦の長さ
+      let baselineBendRatio = null;          // 正面時の 胴の縦 ÷ 脚の縦
+      let baselineRightSign = -1;            // 本人の右側が画像のどちら向きか（映像の左右反転に依存しない）
+      let bendDepthThreshold = BEND_DEPTH_DEFAULT;
+      let trackingLostSince = null;
       const FORM_EXCELLENT_SCORE = 88;
-      const OBSTACLE_CHECK_DELAY_MS = 1050;
+      const OBSTACLE_CHECK_DELAY_MS = 400;
       const OBSTACLE_TIMEOUT_MS = 5600;
       const REFLECT_CHECK_DELAY_MS = 550;
       const REFLECT_TIMEOUT_MS = 2950;
@@ -2527,9 +2551,161 @@
       }
 
       function blendWithReference(featureQuality, lm) {
+        // お手本動画は棒人間のアニメーションで、MediaPipeは人として検出できない（検出率0%）。
+        // そのため旧実装の「動画骨格」は常に0.5固定となり、一致度を最大85%に抑えていた。
+        // お手本との照合は使わず、動作の特徴量だけで一致度を出す。
+        if (!latestReferenceLandmarks) return { quality: featureQuality, reference: null };
         const reference = skeletonSimilarity(lm);
         const referenceWeight = selectedInputMode === "mediapipe" ? .30 : .18;
         return { quality: featureQuality * (1 - referenceWeight) + reference * 100 * referenceWeight, reference };
+      }
+
+      function referenceLabel(matched) {
+        return matched.reference == null ? "" : `動画骨格 ${Math.round(matched.reference * 100)}・`;
+      }
+
+      function poseAspect() {
+        return video && video.videoWidth && video.videoHeight ? video.videoWidth / video.videoHeight : 16 / 9;
+      }
+
+      function poseVisible(lm, indices, min = POSE_VISIBILITY_MIN) {
+        return indices.every((i) => lm[i] && Number.isFinite(lm[i].x) && Number.isFinite(lm[i].y) && (lm[i].visibility ?? 1) >= min);
+      }
+
+      // 画像の縦を1とした等方的な単位で体の寸法を求める（横は縦横比で補正）。
+      function bodyMetrics(lm) {
+        const aspect = poseAspect();
+        const shoulderX = average(lm[11].x, lm[12].x);
+        const hipX = average(lm[23].x, lm[24].x);
+        const shoulderY = average(lm[11].y, lm[12].y);
+        const hipY = average(lm[23].y, lm[24].y);
+        const anklesVisible = poseVisible(lm, [27, 28]);
+        const ankleY = average(lm[27].y, lm[28].y);
+        const shoulderWidth = Math.abs(lm[11].x - lm[12].x) * aspect;
+        const torsoV = Math.max(hipY - shoulderY, 0.01);
+        const legV = anklesVisible ? Math.max(ankleY - hipY, 0.02) : null;
+        return { aspect, shoulderX, hipX, shoulderY, hipY, ankleY, anklesVisible, shoulderWidth, torsoV, legV,
+          twistRatio: shoulderWidth / torsoV, bendRatio: legV ? torsoV / legV : null };
+      }
+
+      // 身体調整をスキップした場合の正面基準：直近4秒の上位値（正面ほど肩幅比・胴比が大きい）
+      const neutralHistory = [];
+      function observeNeutralPose(m, now) {
+        neutralHistory.push({ now, twist: m.twistRatio, bend: m.bendRatio });
+        while (neutralHistory.length && now - neutralHistory[0].now > 4000) neutralHistory.shift();
+      }
+      function recentMax(key) {
+        const values = neutralHistory.map((v) => v[key]).filter(Number.isFinite).sort((a, b) => a - b);
+        // 最大値ではなく上位10%点を使い、1フレームの外れ値に引っ張られないようにする
+        return values.length >= 5 ? values[Math.floor(values.length * 0.9)] : null;
+      }
+
+      // 体のねじり：正面時に比べて見かけの肩幅（胴の縦の長さとの比）がどれだけ縮んだか。
+      function twistCompression(metrics) {
+        const neutral = baselineTwistRatio || recentMax("twist") || metrics.twistRatio;
+        return 1 - metrics.twistRatio / neutral;
+      }
+
+      function createTwistTracker() {
+        let s;
+        const reset = () => { s = { ratios: [], minComp: Infinity, holdSince: null, lastAt: null, startHipX: null, peakComp: 0 }; };
+        reset();
+        return { reset, state: () => s, update(lm, now, threshold) {
+          if (s.lastAt != null && now - s.lastAt > TRACKING_GRACE_MS) reset();
+          s.lastAt = now;
+          const m = bodyMetrics(lm);
+          s.ratios.push(m.twistRatio);
+          if (s.ratios.length > 3) s.ratios.shift();
+          const smoothed = [...s.ratios].sort((a, b) => a - b)[Math.floor(s.ratios.length / 2)];
+          const compression = twistCompression({ ...m, twistRatio: smoothed });
+          s.startHipX ??= m.hipX;
+          s.minComp = Math.min(s.minComp, compression);
+          s.peakComp = Math.max(s.peakComp, compression);
+          // ねじりは回転なので肩の中心は腰の真上に残る。横曲げだけはここで除外する。
+          const sideBend = Math.abs(m.shoulderX - m.hipX) * m.aspect / m.torsoV;
+          const rotated = compression >= threshold && sideBend < 0.5;
+          if (rotated) s.holdSince ??= now; else s.holdSince = null;
+          const detected = rotated && now - s.holdSince >= 100;
+          return { detected, compression, sideBend, rotated };
+        }};
+      }
+
+      // 斜め下に曲げて胸を開く：前屈の深さ・手の向き・起き上がり＋腕の開き。
+      function bendDepth(m) {
+        const neutralBend = baselineBendRatio || recentMax("bend");
+        if (m.bendRatio != null && neutralBend) return 1 - m.bendRatio / neutralBend;
+        // 足首が見えないとき：胴の縦の長さの縮みで代用
+        return 1 - m.torsoV / Math.max(baselineTorsoLength || m.torsoV, 0.01);
+      }
+
+      function handSide(lm, m) {
+        // 正：本人の右側へ、負：本人の左側へ（胴の長さ単位）。画像の左右反転に依存しない。
+        const wristX = average(lm[15].x, lm[16].x);
+        const liveSign = Math.sign(lm[24].x - lm[23].x) || baselineRightSign;
+        const sign = poseVisible(lm, [23, 24], 0.5) ? liveSign : baselineRightSign;
+        return (wristX - m.hipX) * sign * m.aspect / Math.max(baselineTorsoLength || m.torsoV, 0.05);
+      }
+
+      function createBendTracker() {
+        let s;
+        const reset = () => { s = { phase: "down", downFrames: 0, openFrames: 0, downAt: null, lastAt: null, maxDepth: 0, wrongSide: false }; };
+        reset();
+        return { reset, state: () => s, update(lm, now, requiredDirection, depthThreshold, allowDown = true) {
+          if (s.lastAt != null && now - s.lastAt > 1500) reset();
+          s.lastAt = now;
+          if (!poseVisible(lm, [11, 12, 23, 24, 15, 16], 0.25)) return { phase: s.phase, downOk: false, openOk: false, depth: 0, side: 0 };
+          const m = bodyMetrics(lm);
+          const depth = bendDepth(m);
+          const sideRaw = handSide(lm, m);
+          const side = requiredDirection === "left" ? -sideRaw : requiredDirection === "right" ? sideRaw : Math.abs(sideRaw);
+          s.maxDepth = Math.max(s.maxDepth, depth);
+          let downOk = false, openOk = false;
+          if (s.phase === "down") {
+            const deep = depth >= depthThreshold;
+            s.wrongSide = deep && side <= -0.08;
+            downOk = deep && side >= 0.08 && allowDown;
+            s.downFrames = downOk ? s.downFrames + 1 : 0;
+            if (s.downFrames >= 2) { s.phase = "open"; s.downAt = now; }
+          } else {
+            const wristSpan = Math.abs(lm[15].x - lm[16].x) * m.aspect;
+            const wristsHigh = lm[15].y < m.shoulderY && lm[16].y < m.shoulderY;
+            const upright = depth <= Math.max(0.15, depthThreshold * 0.5);
+            openOk = upright && (wristSpan >= m.shoulderWidth * 1.5 || wristsHigh);
+            s.openFrames = openOk ? s.openFrames + 1 : 0;
+          }
+          return { phase: s.phase, downOk, openOk: s.phase === "open" && s.openFrames >= 2 && now - s.downAt >= 200,
+            enteredOpen: s.phase === "open" && s.downAt === now, depth, side, wrongSide: s.wrongSide };
+        }};
+      }
+      const twistTracker = createTwistTracker();
+      const bendTracker = createBendTracker();
+
+      // 本番・チュートリアル共通：斜め下→胸を開く の1フレーム分の処理と表示
+      function stepBendMotion(lm, now, requiredDirection, allowDown = true) {
+        const r = bendTracker.update(lm, now, requiredDirection, bendDepthThreshold, allowDown);
+        const depthPct = Math.round(Math.max(0, Math.min(r.depth / bendDepthThreshold, 1)) * 100);
+        const qualityDirection = requiredDirection ?? (handSide(lm, bodyMetrics(lm)) >= 0 ? "right" : "left");
+        if (r.phase === "down") {
+          const down = computeDiagonalDownQuality(lm, qualityDirection);
+          r.quality = down.quality;
+          const st = bendTracker.state();
+          st.bestDown = Math.max(st.bestDown ?? 0, down.quality);
+          setFormQuality(down.quality, down.details);
+          bendMeter.style.width = `${depthPct}%`;
+          bendValue.textContent = `斜め下 ${depthPct}%`;
+          r.hint = r.wrongSide
+            ? `反対です！ ${requiredDirection === "right" ? "右" : "左"}の足先へ手を近づけよう`
+            : depthPct < 100 ? "もっと深く、足先へ手を近づけよう" : `手を${qualityDirection === "right" ? "右" : "左"}の足先へ`;
+        } else {
+          const open = computeChestOpenQuality(lm);
+          r.quality = open.quality;
+          r.openDetails = open.details;
+          bendMeter.style.width = r.openOk ? "100%" : "60%";
+          bendValue.textContent = `胸を開く ${Math.round(open.quality)}%`;
+          r.hint = "起き上がって、両腕を大きく開こう";
+        }
+        r.downQuality = Math.max(bendTracker.state().bestDown ?? 0, DODGE_PASS_SCORE);
+        return r;
       }
 
       // Display-only crop: keep original video and landmark coordinates for scoring.
@@ -2693,20 +2869,26 @@
         }};
       }
       function createSimpleJumpTracker() {
-        let base=null, previous=null, stable=[], air=false, riseSince=null, groundSince=null, upAt=-Infinity, changedAt=null;
-        const reset=()=>{base=null;previous=null;stable=[];air=false;riseSince=null;groundSince=null;upAt=-Infinity;changedAt=null;};
-        return {reset,update(p){
-          const h=Math.max(.010,(p.torso || .25)*.06);
+        let base=null, previous=null, stable=[], air=false, riseSince=null, groundSince=null, upAt=-Infinity, changedAt=null, raw=[];
+        const reset=()=>{base=null;previous=null;stable=[];air=false;riseSince=null;groundSince=null;upAt=-Infinity;changedAt=null;raw=[];};
+        const med3=(key)=>{const v=raw.map(q=>q[key]).sort((a,b)=>a-b);return v[Math.floor(v.length/2)];};
+        return {reset,update(input){
+          const h=Math.max(.010,(input.torso || .25)*.06);
           const empty={detected:false,landed:false,rise:0,threshold:h,ready:false};
-          if(!Number.isFinite(p.hip)||!Number.isFinite(p.shoulder)){reset();return empty;}
-          if(previous && (p.now<=previous.now || p.now-previous.now>300 ||
-            Math.abs(p.hip-previous.hip)>.12 || Math.abs(p.shoulder-previous.shoulder)>.12))reset();
+          if(!Number.isFinite(input.hip)||!Number.isFinite(input.shoulder)){reset();return empty;}
+          if(previous && (input.now<=previous.now || input.now-previous.now>300 ||
+            Math.abs(input.hip-previous.hip)>.12 || Math.abs(input.shoulder-previous.shoulder)>.12))reset();
+          // 3フレームの中央値で骨格の細かな揺れ（服と背景が似ているときに大きくなる）を抑える
+          raw.push({hip:input.hip,shoulder:input.shoulder}); if(raw.length>3)raw.shift();
+          const p={...input,hip:med3("hip"),shoulder:med3("shoulder")};
           const old=previous; previous={...p};
           if(!base){
             stable.push({...p});
             while(stable.length>1 && p.now-stable[1].now>=420)stable.shift();
             const spread=key=>Math.max(...stable.map(v=>v[key]))-Math.min(...stable.map(v=>v[key]));
-            if(spread("hip")>h*.3 || spread("shoulder")>h*.3)stable=[{...p}];
+            // 旧: h×0.3（720pで約3px）。骨格の揺れだけで基準が取れず「まっすぐ立ってね」から進めなかった。
+            const allowed=Math.max(h*.8,.008);
+            if(spread("hip")>allowed || spread("shoulder")>allowed)stable=[{...p}];
             if(p.now-stable[0].now>=350){
               base={hip:stable.reduce((a,v)=>a+v.hip,0)/stable.length,
                 shoulder:stable.reduce((a,v)=>a+v.shoulder,0)/stable.length};
@@ -2754,6 +2936,12 @@
         if (!jumpCueReady && result.detected) {
           simpleJumpTracker.reset();
           result.detected=false; result.ready=false;
+        }
+        // 本番の受付中に一度でも基準を取り直すと、旧実装では合図が二度と出ず、そのジャンプは
+        // 時間切れまで絶対に成功しなかった。受付中は合図音なしで静かに再び受け付ける。
+        if (result.ready && !jumpCueReady && gameMode === "battle" && battleMission?.phase === "active" && battleMission.kind === "jump") {
+          jumpCueReady = true;
+          setStatus("準備OK！ ジャンプ！", "軽く1回跳ぼう");
         }
         if (result.ready && !jumpCueReady && !activeVoice && (gameMode !== "battle" || battleMission?.phase === "preparing")) {
           jumpCueReady=true;
@@ -2815,50 +3003,53 @@
         const upright = clamp01(1 - Math.abs(shoulderX - hipX) / Math.max(baselineShoulderWidth * 0.32, 0.04));
         const featureQuality = (height * .38 + bothFeet * .27 + feetTogether * .18 + upright * .17) * 100;
         const matched = blendWithReference(featureQuality, lm);
-        return { quality: matched.quality, details: `動画骨格 ${Math.round(matched.reference * 100)}・高さ ${Math.round(height * 100)}・両脚同時 ${Math.round(bothFeet * 100)}・脚のそろい ${Math.round(feetTogether * 100)}・体幹 ${Math.round(upright * 100)}` };
+        return { quality: matched.quality, details: `${referenceLabel(matched)}高さ ${Math.round(height * 100)}・両脚同時 ${Math.round(bothFeet * 100)}・脚のそろい ${Math.round(feetTogether * 100)}・体幹 ${Math.round(upright * 100)}` };
       }
 
       function computeDiagonalDownQuality(lm, requiredDirection) {
-        const torso = Math.max(baselineTorsoLength, 0.10);
-        const shoulderY = average(lm[11].y, lm[12].y);
-        const hipX = average(lm[23].x, lm[24].x);
+        const m = bodyMetrics(lm);
         const wrist = { x: average(lm[15].x, lm[16].x), y: average(lm[15].y, lm[16].y) };
+        // 旧実装は「右足首(28)へ近づく」と「手が画像の右へ動く」を同時に求めていたが、
+        // カメラ画像（左右反転前）では本人の右足は画像の左側にあるため両立せず、
+        // 正しい側に曲げると方向点が0、反対側に曲げた方が高得点になっていた。
         const targetAnkle = requiredDirection === "right" ? lm[28] : lm[27];
-        const directionValue = requiredDirection === "right" ? wrist.x - hipX : hipX - wrist.x;
-        const depth = minimumScore((shoulderY - baselineShoulderY) / torso, 0.22, 0.44);
-        const diagonal = minimumScore(directionValue / Math.max(baselineShoulderWidth, .08), 0.24, 0.55);
+        const sideRaw = handSide(lm, m);
+        const directionValue = requiredDirection === "right" ? sideRaw : -sideRaw;
+        const depth = minimumScore(bendDepth(m), 0.30, 0.60);
+        const diagonal = minimumScore(directionValue, 0.10, 0.25);
         const handToFoot = clamp01(1 - distance(wrist, targetAnkle) / Math.max(baselineLegLength * 1.2, .20));
         const knees = (minimumScore(jointAngle(lm[23], lm[25], lm[27]), 140, 170) + minimumScore(jointAngle(lm[24], lm[26], lm[28]), 140, 170)) / 2;
         const featureQuality = (depth * .32 + diagonal * .25 + handToFoot * .25 + knees * .18) * 100;
         const matched = blendWithReference(featureQuality, lm);
-        return { quality: matched.quality, details: `動画骨格 ${Math.round(matched.reference * 100)}・斜め下 ${Math.round(depth * 100)}・足先へ ${Math.round(handToFoot * 100)}・方向 ${Math.round(diagonal * 100)}・ひざ伸び ${Math.round(knees * 100)}` };
+        return { quality: matched.quality, details: `${referenceLabel(matched)}斜め下 ${Math.round(depth * 100)}・足先へ ${Math.round(handToFoot * 100)}・方向 ${Math.round(diagonal * 100)}・ひざ伸び ${Math.round(knees * 100)}` };
       }
 
       function computeChestOpenQuality(lm) {
-        const torso = Math.max(baselineTorsoLength, .10);
-        const shoulderY = average(lm[11].y, lm[12].y);
-        const upright = clamp01(1 - Math.abs(shoulderY - baselineShoulderY) / (torso * .38));
+        const m = bodyMetrics(lm);
+        const depth = bendDepth(m);
+        const upright = clamp01(1 - Math.max(depth, 0) / 0.30);
         const leftElbow = minimumScore(jointAngle(lm[11], lm[13], lm[15]), 135, 172);
         const rightElbow = minimumScore(jointAngle(lm[12], lm[14], lm[16]), 135, 172);
-        const armSpan = minimumScore(Math.abs(lm[15].x - lm[16].x) / Math.max(baselineShoulderWidth, .08), 1.0, 1.45);
-        const chestLift = clamp01((baselineShoulderY - shoulderY) / (torso * .18) + .65);
+        const armSpan = minimumScore(Math.abs(lm[15].x - lm[16].x) * m.aspect / Math.max(m.shoulderWidth, .05), 1.2, 2.2);
+        const wristsHigh = clamp01((m.shoulderY - average(lm[15].y, lm[16].y)) / (m.torsoV * .5) + .5);
+        const chestLift = Math.max(clamp01(-depth / 0.08 + .65), wristsHigh);
         const featureQuality = (upright * .28 + ((leftElbow + rightElbow) / 2) * .27 + armSpan * .28 + chestLift * .17) * 100;
         const matched = blendWithReference(featureQuality, lm);
-        return { quality: matched.quality, details: `動画骨格 ${Math.round(matched.reference * 100)}・起き上がり ${Math.round(upright * 100)}・ひじ伸び ${Math.round((leftElbow + rightElbow) * 50)}・胸の開き ${Math.round(armSpan * 100)}・反り ${Math.round(chestLift * 100)}` };
+        return { quality: matched.quality, details: `${referenceLabel(matched)}起き上がり ${Math.round(upright * 100)}・ひじ伸び ${Math.round((leftElbow + rightElbow) * 50)}・胸の開き ${Math.round(armSpan * 100)}・反り ${Math.round(chestLift * 100)}` };
       }
 
-      function computeTwistQuality(lm) {
-        const shoulderWidth = Math.max(Math.abs(lm[11].x - lm[12].x), .04);
-        const compression = Math.max(0, 1 - shoulderWidth / Math.max(baselineShoulderWidth, .04));
-        const shoulderX = average(lm[11].x, lm[12].x);
-        const hipX = average(lm[23].x, lm[24].x);
-        const rotation = minimumScore(compression, Math.max(twistReflectThreshold, .14), .25);
-        const noSideBend = clamp01(1 - Math.abs(hipX - shoulderX) / Math.max(baselineShoulderWidth * .30, .04));
-        const hipStable = clamp01(1 - Math.abs(hipX - (baselineHipX ?? hipX)) / Math.max(baselineShoulderWidth * .28, .04));
+      function computeTwistQuality(lm, referenceHipX = null) {
+        const m = bodyMetrics(lm);
+        const compression = Math.max(0, twistCompression(m));
+        const rotation = minimumScore(compression, Math.max(twistReflectThreshold, .12), .30);
+        const noSideBend = clamp01(1 - Math.abs(m.hipX - m.shoulderX) * m.aspect / (m.torsoV * .5));
+        // 腰の安定：基準取得時の位置ではなく、この動作を始めた時点の位置からのずれを見る
+        const startHipX = referenceHipX ?? twistTracker.state().startHipX ?? m.hipX;
+        const hipStable = clamp01(1 - Math.abs(m.hipX - startHipX) * m.aspect / (m.torsoV * .45));
         const elbowExtension = (minimumScore(jointAngle(lm[11], lm[13], lm[15]), 125, 165) + minimumScore(jointAngle(lm[12], lm[14], lm[16]), 125, 165)) / 2;
         const featureQuality = (rotation * .42 + noSideBend * .23 + hipStable * .20 + elbowExtension * .15) * 100;
         const matched = blendWithReference(featureQuality, lm);
-        return { quality: matched.quality, compression, details: `動画骨格 ${Math.round(matched.reference * 100)}・ねじり幅 ${Math.round(rotation * 100)}・横曲げ抑制 ${Math.round(noSideBend * 100)}・腰の安定 ${Math.round(hipStable * 100)}・腕 ${Math.round(elbowExtension * 100)}` };
+        return { quality: matched.quality, compression, details: `${referenceLabel(matched)}ねじり幅 ${Math.round(rotation * 100)}・横曲げ抑制 ${Math.round(noSideBend * 100)}・腰の安定 ${Math.round(hipStable * 100)}・腕 ${Math.round(elbowExtension * 100)}` };
       }
 
       function resetTwistMotion() {
@@ -2866,25 +3057,17 @@
         twistNeutralCompression = null;
         twistMotionSince = null;
         twistMotionReady = false;
+        twistTracker.reset();
       }
 
-      function hasTwistMotion(twist, now) {
-        // Require a front-facing start, then a sustained increase in rotation.
-        if (!twistMotionReady) {
-          if (twist.compression <= 0.08) {
-            if (twistNeutralSince == null) twistNeutralSince = now;
-            if (now - twistNeutralSince >= 120) {
-              twistMotionReady = true;
-              twistNeutralCompression = twist.compression;
-            }
-          } else twistNeutralSince = null;
-          return false;
-        }
-        const rotated = twist.compression >= Math.max(0.18, twistReflectThreshold) &&
-          twist.compression - twistNeutralCompression >= 0.12 && twist.quality >= FORM_PASS_SCORE;
-        if (!rotated) { twistMotionSince = null; return false; }
-        if (twistMotionSince == null) twistMotionSince = now;
-        return now - twistMotionSince >= 120;
+      // 旧実装の問題：①まず「正面（肩幅の縮み8%以下）」を0.12秒保つ必要があり、基準取得時より
+      // 1歩下がるだけで正面と認識されず開始できなかった。②一致度65%以上も必須で、お手本照合が
+      // 常に50%だったため実質的に特徴量93%が必要だった。③1フレームでも足首などの可視性が0.55を
+      // 下回るとリセットされた。現在は「距離に依存しない肩幅比の縮み」が閾値を約0.1秒超えれば成功。
+      function hasTwistMotion(lm, now) {
+        const result = twistTracker.update(lm, now, twistReflectThreshold);
+        twistMotionReady = true;
+        return result.detected;
       }
 
       function relativeLabel(value) {
@@ -2964,6 +3147,13 @@
         baselineShoulderWidth = null;
         baselineTorsoLength = null;
         baselineLegLength = null;
+        baselineTwistRatio = null;
+        baselineBendRatio = null;
+        baselineRightSign = -1;
+        bendDepthThreshold = BEND_DEPTH_DEFAULT;
+        trackingLostSince = null;
+        neutralHistory.length = 0;
+        bendTracker.reset();
         calibrationSamples = [];
         airborne = false;
         attackArmed = false;
@@ -3030,7 +3220,7 @@
         bestTwistQuality = 0;
         jumpHipThreshold = JUMP_HIP_THRESHOLD;
         jumpAnkleThreshold = JUMP_ANKLE_THRESHOLD;
-        twistReflectThreshold = 0.13;
+        twistReflectThreshold = TWIST_THRESHOLD_DEFAULT;
         obstacleZone.className = "obstacle-zone";
         obstacleZone.setAttribute("aria-hidden", "true");
         bendMeter.style.width = "0%";
@@ -3066,7 +3256,7 @@
 
       function hipJumpVisible(lm) {
         return [11,12,23,24].every(i => lm[i] && Number.isFinite(lm[i].y) &&
-          (lm[i].visibility ?? 0) > .55 && lm[i].y >= 0 && lm[i].y <= 1);
+          (lm[i].visibility ?? 0) >= POSE_VISIBILITY_MIN && lm[i].y >= 0 && lm[i].y <= 1);
       }
 
       function isHipJumpPhase() {
@@ -3101,6 +3291,15 @@
         baselineShoulderWidth = measured("shoulderWidth");
         baselineTorsoLength = measured("torsoLength");
         baselineLegLength = measured("legLength");
+        // 距離に依存しない比率（測定できなかった場合は null → 直近の正面姿勢から自動推定）
+        const measuredRatio = (key) => {
+          const values = calibrationSamples.map((sample) => sample[key]).filter(Number.isFinite);
+          return values.length >= 5 ? median(values) : null;
+        };
+        baselineTwistRatio = measuredRatio("twistRatio");
+        baselineBendRatio = measuredRatio("bendRatio");
+        const rightSign = measuredRatio("rightSign");
+        baselineRightSign = rightSign ? Math.sign(rightSign) : -1;
       }
 
       function startTraining() {
@@ -3118,6 +3317,8 @@
         phaseSkipButton.textContent = stage < 2
           ? "この練習をスキップして次へ"
           : "この練習をスキップして完了へ";
+        twistTracker.reset();
+        bendTracker.reset();
         if (stage === 1) {
           imuJumpIntensity = 0;
           imuJumpDetectedAt = -Infinity;
@@ -3208,9 +3409,10 @@
         if (trainingStage === 0) {
           const twistForm = computeTwistQuality(lm);
           setFormQuality(twistForm.quality, twistForm.details);
-          const compression = Math.max(0, 1 - shoulderWidth / Math.max(baselineShoulderWidth, 0.04));
+          const twistNow = twistTracker.update(lm, performance.now(), 0.13);
+          const compression = Math.max(0, twistNow.compression);
           maxTwist = Math.max(maxTwist, compression);
-          if (!twistAway && compression > 0.13 && twistForm.quality >= 58) twistAway = true;
+          if (!twistAway && twistNow.detected) twistAway = true;
           if (twistAway && compression < 0.07) {
             twistPeakCount += 1;
             twistAway = false;
@@ -3239,41 +3441,26 @@
           return;
         }
 
-        const torso = Math.max(baselineTorsoLength, 0.1);
-        const shoulderDrop = (shoulderY - baselineShoulderY) / torso;
-        const wristX = average(lm[15].x, lm[16].x);
-        const diagonalOffset = Math.abs(wristX - hipX) / Math.max(baselineShoulderWidth, 0.08);
-        const downLeft = computeDiagonalDownQuality(lm, "left");
-        const downRight = computeDiagonalDownQuality(lm, "right");
-        const downForm = downLeft.quality >= downRight.quality ? downLeft : downRight;
-        setFormQuality(downForm.quality, downForm.details);
-        maxDiagonalBend = Math.max(maxDiagonalBend, shoulderDrop);
-        if (!diagonalDownSeen && shoulderDrop > 0.16 && diagonalOffset > 0.20 && downForm.quality >= 50) { diagonalDownSeen = true; playVoice("chest-open"); }
-
-        if (!diagonalDownSeen) {
-          const progress = Math.min(Math.max(shoulderDrop / 0.16, diagonalOffset / 0.20), 1) * 50;
-          trainingFill.style.width = `${progress}%`;
+        // 練習では左右どちらの足先でもOK
+        const r = stepBendMotion(lm, performance.now(), null, true);
+        maxDiagonalBend = Math.max(maxDiagonalBend, r.depth);
+        if (r.enteredOpen && !diagonalDownSeen) { diagonalDownSeen = true; playVoice("chest-open"); }
+        if (r.phase === "down") {
+          trainingFill.style.width = `${Math.min(Math.max(r.depth, 0) / bendDepthThreshold, 1) * 50}%`;
           trainingCue.textContent = "両手を片方の足先へ近づける";
           return;
         }
-
-        const leftElbow = jointAngle(lm[11], lm[13], lm[15]);
-        const rightElbow = jointAngle(lm[12], lm[14], lm[16]);
-        const upright = Math.abs(shoulderY - baselineShoulderY) < torso * 0.32;
-        const armsOpen = leftElbow > 130 && rightElbow > 130 &&
-          Math.abs(lm[15].x - lm[16].x) > baselineShoulderWidth;
-        const openForm = computeChestOpenQuality(lm);
-        setFormQuality(openForm.quality, openForm.details);
-        trainingFill.style.width = `${upright && armsOpen ? 100 : 65}%`;
-        trainingCue.textContent = "上体を起こし、ひじを伸ばして胸を開く";
-        if (upright && armsOpen && openForm.quality >= 50) completeTrainingStage();
+        trainingFill.style.width = `${r.openOk ? 100 : 65}%`;
+        trainingCue.textContent = "上体を起こし、両腕を大きく開いて胸を開く";
+        if (r.openOk) completeTrainingStage();
       }
 
       function finishTraining() {
         gameMode = "summary";
         jumpHipThreshold = Math.max(0.035, Math.min(maxTrainingHipRise * 0.55, 0.07));
         jumpAnkleThreshold = Math.max(0.012, Math.min(jumpHipThreshold * 0.38, 0.026));
-        twistReflectThreshold = Math.max(0.09, Math.min(maxTwist * 0.62, 0.18));
+        twistReflectThreshold = personalTwistThreshold(maxTwist);
+        bendDepthThreshold = personalBendThreshold(maxDiagonalBend);
         if (selectedInputMode === "sensor" && maxTrainingGyro >= 20) {
           imuTwistThreshold = Math.max(30, Math.min(160, Math.max(maxTrainingGyro * 0.48, imuIdleGyroBaseline * 2.2 + 10)));
           imuCalibrationReady = true;
@@ -3351,6 +3538,7 @@
       function showTutorialStage(stage) {
         playVoice(["stand-ready", "bend-right", "twist-now"][stage]);
         resetTwistMotion();
+        bendTracker.reset();
         tutorialNextButton.hidden = false;
         tutorialNextButton.disabled = false;
         tutorialNextButton.textContent = stage < 2 ? "次へ（できなくても進める）" : "練習を終える（できなくても進める）";
@@ -3383,7 +3571,7 @@
           {
             icon: "🔮",
             title: "くるっとリフレクト！ 上体をねじる",
-            description: "まず正面を向こう。足の位置を動かさず、腕を振って上体をねじろう。横に倒れないようにね。",
+            description: "足の位置を動かさず、腕を振って上体を横へねじろう。横に倒れないようにね。",
             cue: "腕を振る・腰を止める・横へ倒れない",
           },
         ];
@@ -3418,7 +3606,7 @@
           reflectZone.className = "reflect-zone tutorial-show incoming";
           reflectZone.setAttribute("aria-hidden", "false");
           missionText.textContent = "光る弾には上体ねじり！";
-          setStatus("やってみよう：ねじり反射", "まず正面を向いてから、上体を左右どちらかへねじってください");
+          setStatus("やってみよう：ねじり反射", "腰は正面のまま、上体を左右どちらかへねじってください");
           playSound("bossWarning", 0.58);
         }
         playSound("dataDisplay", 0.45);
@@ -3504,26 +3692,19 @@
         if (tutorialStage === 1) {
           const imuFresh = selectedInputMode === "sensor" && imuBendCalibrationReady && now - imuLastReceivedAt <= IMU_STALE_MS;
           const imuRecent = imuFresh && now - imuBendDetectedAt <= IMU_BEND_HOLD_MS;
-          if (!Number.isFinite(diagonalDownSeenAt)) {
-            const down = computeDiagonalDownQuality(lm, "right");
-            setFormQuality(down.quality, down.details);
-            bendMeter.style.width = `${Math.min(down.quality, 100)}%`;
-            bendValue.textContent = `斜め下 ${Math.round(down.quality)}%`;
-            if (down.quality >= DODGE_PASS_SCORE && (!imuFresh || imuRecent)) {
-              diagonalDownQuality = down.quality;
-              diagonalDownSeenAt = now;
-              obstacleZone.className = "obstacle-zone";
-              obstacleZone.setAttribute("aria-hidden", "true");
-              playVoice("chest-open");
-              tutorialCue.textContent = "次は起き上がって、ひじを伸ばし胸を開く！";
-            }
-          } else {
-            const open = computeChestOpenQuality(lm);
-            const combined = (diagonalDownQuality + open.quality) / 2;
-            setFormQuality(combined, `前半 ${Math.round(diagonalDownQuality)}・後半 ${Math.round(open.quality)}｜${open.details}`);
-            bendMeter.style.width = `${Math.min(open.quality, 100)}%`;
-            bendValue.textContent = `胸を開く ${Math.round(open.quality)}%`;
-            if (open.quality >= DODGE_PASS_SCORE && now - diagonalDownSeenAt > 250) completeTutorialStage();
+          const r = stepBendMotion(lm, now, "right", !imuFresh || imuRecent);
+          if (r.enteredOpen) {
+            diagonalDownQuality = r.downQuality;
+            diagonalDownSeenAt = now;
+            obstacleZone.className = "obstacle-zone";
+            obstacleZone.setAttribute("aria-hidden", "true");
+            playVoice("chest-open");
+          }
+          tutorialCue.textContent = r.phase === "open" ? "次は起き上がって、両腕を大きく開く！" : r.hint;
+          if (r.phase === "open") {
+            const combined = (diagonalDownQuality + r.quality) / 2;
+            setFormQuality(combined, `前半 ${Math.round(diagonalDownQuality)}・後半 ${Math.round(r.quality)}｜${r.openDetails}`);
+            if (r.openOk) completeTutorialStage();
           }
           return;
         }
@@ -3532,8 +3713,8 @@
         setFormQuality(twist.quality, twist.details);
         const imuFresh = selectedInputMode === "sensor" && imuCalibrationReady && now - imuLastReceivedAt <= IMU_STALE_MS;
         const imuRecent = imuFresh && now - imuTwistDetectedAt <= IMU_TWIST_HOLD_MS;
-        const cameraTwist = hasTwistMotion(twist, now);
-        tutorialCue.textContent = twistMotionReady ? "上体をねじって、少し姿勢を保とう！" : "まず正面を向こう！";
+        const cameraTwist = hasTwistMotion(lm, now);
+        tutorialCue.textContent = "腰は正面のまま、上体を横へねじろう！";
         twistMeter.style.width = `${Math.min(twist.quality, 100)}%`;
         twistValue.textContent = imuFresh
           ? `一致 ${Math.round(twist.quality)}% / IMU ${Math.round(imuGyroSmoothed)}°/s`
@@ -3865,15 +4046,26 @@
         previousFrameAt = now;
 
         const hipOnly = baselineHipY != null && isHipJumpPhase();
-        if (!(hipOnly ? hipJumpVisible(lm) : fullBodyVisible(lm))) {
-          if (obstacleActive || bossAttackActive) actionTrackingLost = true;
-          resetStableJump();
-          jumpFusionState.textContent = hipOnly ? "肩と腰を確認中（判定を一時停止）" : "全身を確認中";
-          resetTwistMotion();
-          poseState.textContent = "全身を確認中";
-          setStatus(hipOnly ? "肩と腰を映してください" : "頭から足先まで映してください", hipOnly ? "ジャンプは足が見えなくても判定できます" : "カメラから少し離れると判定しやすくなります");
+        // 基準姿勢の測定だけは全身が必要。動作判定中は判定に使う肩と腰が見えていればよい
+        // （旧：常に足首まで0.55以上が必要で、ねじると奥の肩、前屈すると足首の可視性が下がり判定が止まっていた）。
+        const visibleForPhase = baselineHipY == null ? fullBodyVisible(lm)
+          : hipOnly ? hipJumpVisible(lm) : poseVisible(lm, [11, 12, 23, 24]);
+        if (!visibleForPhase) {
+          trackingLostSince ??= now;
+          // 一瞬の見失いでは状態を消さない。TRACKING_GRACE_MS を超えたときだけリセットする。
+          if (now - trackingLostSince > TRACKING_GRACE_MS) {
+            if (obstacleActive || bossAttackActive) actionTrackingLost = true;
+            resetStableJump();
+            resetTwistMotion();
+            jumpFusionState.textContent = hipOnly ? "肩と腰を確認中（判定を一時停止）" : "全身を確認中";
+            poseState.textContent = "全身を確認中";
+            setStatus(hipOnly ? "肩と腰を映してください" : baselineHipY == null ? "頭から足先まで映してください" : "肩と腰を映してください",
+              hipOnly ? "ジャンプは足が見えなくても判定できます" : "カメラから少し離れると判定しやすくなります");
+          }
           return;
         }
+        trackingLostSince = null;
+        if (poseVisible(lm, [11, 12, 23, 24])) observeNeutralPose(bodyMetrics(lm), now);
 
         poseState.textContent = "検出中";
 
@@ -3888,7 +4080,11 @@
             distance(lm[23], lm[25]) + distance(lm[25], lm[27]),
             distance(lm[24], lm[26]) + distance(lm[26], lm[28])
           );
+          const metrics = bodyMetrics(lm);
           calibrationSamples.push({
+            twistRatio: metrics.twistRatio,
+            bendRatio: metrics.bendRatio,
+            rightSign: Math.sign(lm[24].x - lm[23].x) || -1,
             hipY,
             hipX: average(lm[23].x, lm[24].x),
             ankleY,
@@ -4015,43 +4211,34 @@
 
         const requiredDirection = obstacleSide === "left" ? "right" : "left";
         const elapsed = now - obstacleStartedAt;
-        if (!Number.isFinite(diagonalDownSeenAt)) {
-          const down = computeDiagonalDownQuality(lm, requiredDirection);
-          bestObstacleQuality = Math.max(bestObstacleQuality, down.quality);
-          setFormQuality(down.quality, down.details);
-          bendMeter.style.width = `${Math.min(down.quality, 100)}%`;
-          bendValue.textContent = imuBendFresh
-            ? `斜め下 ${Math.round(down.quality)}% / IMU ${imuBendAngle.toFixed(0)}°`
-            : `斜め下 ${Math.round(down.quality)}%`;
-          bendDirectionLabel.textContent = requiredDirection === "right" ? "右足先へ" : "左足先へ";
-          const downOk = down.quality >= DODGE_PASS_SCORE && (!imuBendFresh || imuBendRecent);
-          bendFusionState.textContent = downOk ? "前半OK・胸反らしへ" : "斜め下の姿勢を確認中";
-          if (elapsed >= OBSTACLE_CHECK_DELAY_MS && downOk) {
-            diagonalDownQuality = down.quality;
-            diagonalDownSeenAt = now;
-            obstacleZone.className = "obstacle-zone";
-            obstacleZone.setAttribute("aria-hidden", "true");
-            playVoice("chest-open");
-            setStatus("前半OK！", "上体を起こし、ひじを伸ばして胸を大きく開いてください");
-          }
-        } else if (elapsed >= OBSTACLE_TIMEOUT_MS) {
-          finishObstacle(false);
-          return;
-        } else {
-          const open = computeChestOpenQuality(lm);
-          const combined = (diagonalDownQuality + open.quality) / 2;
-          bestObstacleQuality = Math.max(bestObstacleQuality, combined);
-          setFormQuality(combined, `前半 ${Math.round(diagonalDownQuality)}・後半 ${Math.round(open.quality)}｜${open.details}`);
-          bendMeter.style.width = `${Math.min(open.quality, 100)}%`;
-          bendValue.textContent = `胸を開く ${Math.round(open.quality)}%`;
-          bendDirectionLabel.textContent = "起きて胸を開く";
-          bendFusionState.textContent = open.quality >= DODGE_PASS_SCORE ? "連続動作OK" : "胸の開きを確認中";
-          if (open.quality >= DODGE_PASS_SCORE && now - diagonalDownSeenAt >= 250) finishObstacle(true, combined);
-        }
-
-        if (elapsed >= OBSTACLE_TIMEOUT_MS && !obstacleResolved) {
+        if (elapsed >= OBSTACLE_TIMEOUT_MS) {
           finishObstacle(false, bestObstacleQuality);
+          return;
         }
+        const allowDown = elapsed >= OBSTACLE_CHECK_DELAY_MS && (!imuBendFresh || imuBendRecent);
+        const r = stepBendMotion(lm, now, requiredDirection, allowDown);
+        if (r.phase === "down") {
+          bestObstacleQuality = Math.max(bestObstacleQuality, r.quality);
+          if (imuBendFresh) bendValue.textContent += ` / IMU ${imuBendAngle.toFixed(0)}°`;
+          bendDirectionLabel.textContent = requiredDirection === "right" ? "右足先へ" : "左足先へ";
+          bendFusionState.textContent = r.wrongSide ? "反対側に曲がっています" : "斜め下の姿勢を確認中";
+          if (r.wrongSide) setStatus("反対です！", r.hint);
+          return;
+        }
+        if (r.enteredOpen) {
+          diagonalDownQuality = r.downQuality;
+          diagonalDownSeenAt = now;
+          obstacleZone.className = "obstacle-zone";
+          obstacleZone.setAttribute("aria-hidden", "true");
+          playVoice("chest-open");
+          setStatus("前半OK！", "上体を起こして、両腕を大きく開いてください");
+        }
+        const combined = (diagonalDownQuality + r.quality) / 2;
+        bestObstacleQuality = Math.max(bestObstacleQuality, combined);
+        setFormQuality(combined, `前半 ${Math.round(diagonalDownQuality)}・後半 ${Math.round(r.quality)}｜${r.openDetails}`);
+        bendDirectionLabel.textContent = "起きて胸を開く";
+        bendFusionState.textContent = r.openOk ? "連続動作OK" : "胸の開きを確認中";
+        if (r.openOk) finishObstacle(true, combined);
       }
 
       function syncWideLayoutHeight() {
@@ -4074,8 +4261,8 @@
         const elapsed = now - bossAttackStartedAt;
         bestTwistQuality = Math.max(bestTwistQuality, twist.quality);
         setFormQuality(twist.quality, twist.details);
-        const cameraTwistDetected = hasTwistMotion(twist, now);
-        setStatus("体をねじって反射！", twistMotionReady ? "上体を大きくねじり、少し姿勢を保とう" : "まず正面を向いてから、上体をねじろう");
+        const cameraTwistDetected = hasTwistMotion(lm, now);
+        setStatus("体をねじって反射！", "腰は正面のまま、上体を横へ大きくねじろう");
         const validTwist = cameraTwistDetected && (!imuFresh || imuTwistRecent);
         fusionState.textContent = imuFresh
           ? cameraTwistDetected
@@ -4165,6 +4352,7 @@
         diagonalDownQuality = 0;
         diagonalDownSeenAt = -Infinity;
         bestObstacleQuality = 0;
+        bendTracker.reset();
         obstacleSide = Math.random() < 0.5 ? "left" : "right";
         const requiredLabel = obstacleSide === "left" ? "右" : "左";
         playVoice(obstacleSide === "left" ? "bend-right" : "bend-left");
@@ -4281,25 +4469,28 @@
         const vision = await FilesetResolver.forVisionTasks(
           "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
         );
-        const modelAssetPath = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task";
-        [landmarker, referenceLandmarker] = await Promise.all([
-          PoseLandmarker.createFromOptions(vision, {
-            baseOptions: { modelAssetPath, delegate: "GPU" },
-            runningMode: "VIDEO",
-            numPoses: 1,
-            minPoseDetectionConfidence: 0.55,
-            minPosePresenceConfidence: 0.55,
-            minTrackingConfidence: 0.55,
-          }),
-          PoseLandmarker.createFromOptions(vision, {
-            baseOptions: { modelAssetPath, delegate: "CPU" },
-            runningMode: "VIDEO",
-            numPoses: 1,
-            minPoseDetectionConfidence: 0.45,
-            minPosePresenceConfidence: 0.45,
-            minTrackingConfidence: 0.45,
-          }),
-        ]);
+        // 既定は full モデル（lite より服と背景が似ているときの骨格の揺れ・取り違えが少ない）。
+        // 低スペックPCでは URL に ?model=lite を付けると従来の軽量モデルになる。
+        const modelAssetPath = `https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_${POSE_MODEL}/float16/latest/pose_landmarker_${POSE_MODEL}.task`;
+        const createLandmarker = (delegate) => PoseLandmarker.createFromOptions(vision, {
+          baseOptions: { modelAssetPath, delegate },
+          runningMode: "VIDEO",
+          numPoses: 1,
+          minPoseDetectionConfidence: 0.5,
+          minPosePresenceConfidence: 0.5,
+          minTrackingConfidence: 0.5,
+        });
+        try {
+          landmarker = await createLandmarker("GPU");
+          poseDelegate = "GPU";
+        } catch (error) {
+          console.warn("GPUで姿勢推定を開始できなかったためCPUに切り替えます", error);
+          landmarker = await createLandmarker("CPU");
+          poseDelegate = "CPU";
+        }
+        // お手本動画（棒人間アニメーション）への姿勢推定は行わない：人として検出されず（検出率0%）、
+        // CPUで約90msごとに推論してプレイヤー側のフレームレートを下げていたため。
+        referenceLandmarker = null;
         drawingUtils = new DrawingUtils(ctx);
         trainingDrawingUtils = new DrawingUtils(trainingPreviewCtx);
       }
@@ -4346,6 +4537,38 @@
         }
       }
 
+      // ?debug=1 で、カメラ側の問題（服と背景・照明・距離）か判定側の問題かを現場で切り分ける表示
+      const debugPanel = DEBUG_POSE ? document.createElement("pre") : null;
+      if (debugPanel) {
+        debugPanel.style.cssText = "position:fixed;left:8px;bottom:8px;z-index:9999;margin:0;padding:8px 10px;background:rgba(0,0,0,.8);color:#c7ff4f;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;border-radius:8px;pointer-events:none;white-space:pre";
+        document.body.appendChild(debugPanel);
+      }
+      const debugStats = { frames: [], hips: [], lost: 0, total: 0 };
+      function updatePoseDebug(lm, now, inferMs) {
+        if (!debugPanel) return;
+        debugStats.frames.push(now);
+        while (debugStats.frames.length && now - debugStats.frames[0] > 1000) debugStats.frames.shift();
+        debugStats.total++;
+        const head = `model ${POSE_MODEL} (${poseDelegate})  推論 ${inferMs.toFixed(0)}ms  ${debugStats.frames.length}fps  見失い ${Math.round(debugStats.lost / Math.max(debugStats.total, 1) * 100)}%`;
+        if (!lm) { debugStats.lost++; debugPanel.textContent = `${head}\n人を検出できていません`; return; }
+        const v = (i) => (lm[i].visibility ?? 0).toFixed(2);
+        const hipPx = average(lm[23].y, lm[24].y) * (video.videoHeight || 720);
+        debugStats.hips.push({ now, y: hipPx });
+        while (debugStats.hips.length && now - debugStats.hips[0].now > 1000) debugStats.hips.shift();
+        const ys = debugStats.hips.map((h) => h.y);
+        const mean = ys.reduce((a, b) => a + b, 0) / ys.length;
+        const jitter = Math.sqrt(ys.reduce((a, b) => a + (b - mean) ** 2, 0) / ys.length);
+        const m = bodyMetrics(lm);
+        const low = (i) => (lm[i].visibility ?? 0) < POSE_VISIBILITY_MIN ? "!" : " ";
+        debugPanel.textContent = [
+          head,
+          `可視性  肩 ${v(11)}${low(11)}${v(12)}${low(12)} 腰 ${v(23)}${low(23)}${v(24)}${low(24)} 手首 ${v(15)} ${v(16)} 足首 ${v(27)} ${v(28)}`,
+          `腰の揺れ(直近1秒) ${jitter.toFixed(1)}px  ${jitter > 4 ? "← 大：服と背景が似ている/暗い/遠い可能性" : jitter > 2 ? "← やや大" : "良好"}  ※静止中に確認`,
+          `ねじり ${twistCompression(m).toFixed(2)} / ${twistReflectThreshold.toFixed(2)}   斜め下 ${bendDepth(m).toFixed(2)} / ${bendDepthThreshold.toFixed(2)}   手の向き ${handSide(lm, m).toFixed(2)}`,
+          `モード ${gameMode}${battleMission ? ` / ${battleMission.kind}:${battleMission.phase}` : ""}  基準比 肩${baselineTwistRatio?.toFixed(2) ?? "自動"} 胴${baselineBendRatio?.toFixed(2) ?? "自動"}`,
+        ].join("\n");
+      }
+
       function renderLoop() {
         if (!renderLoopActive) return;
         const now = performance.now();
@@ -4369,7 +4592,9 @@
 
         if (video.readyState >= 2 && video.currentTime !== lastVideoTime) {
           lastVideoTime = video.currentTime;
+          const inferStart = performance.now();
           const result = landmarker.detectForVideo(video, now);
+          updatePoseDebug(result.landmarks[0] || null, now, performance.now() - inferStart);
 
           if (result.landmarks.length) {
             const lm = result.landmarks[0];
@@ -4388,10 +4613,13 @@
             drawTrainingPreview(lm);
             updateJumpDetector(lm);
           } else {
-            if (obstacleActive || bossAttackActive) actionTrackingLost = true;
-            if (gameMode === "battle" || gameMode === "tutorial") announceOutcome("tracking", "身体を見失いました", "足先までカメラに映してください");
-            resetStableJump();
-            resetTwistMotion();
+            trackingLostSince ??= now;
+            if (now - trackingLostSince > TRACKING_GRACE_MS) {
+              if (obstacleActive || bossAttackActive) actionTrackingLost = true;
+              if (gameMode === "battle" || gameMode === "tutorial") announceOutcome("tracking", "身体を見失いました", "肩と腰がカメラに映る位置に立ってください");
+              resetStableJump();
+              resetTwistMotion();
+            }
             drawTrainingPreview();
             poseState.textContent = "未検出";
             if (baselineHipY == null) setStatus("人を探しています", "明るい場所で、カメラの正面に立ってください");
