@@ -1305,6 +1305,60 @@
         .story-camera-effect[data-effect] i { animation:none;top:calc(22% + var(--row) * 13%);opacity:.5; }
         .story-camera-effect span { animation:story-caption-fade 6s ease-out both; }
       }
+      /* 本番の予告カード（待ち時間をカウントダウンとストーリーで見せる） */
+      .mission-card { position:absolute; right:22px; top:50%; z-index:14; pointer-events:none;
+        width:min(300px, 34%); transform:translateY(-50%); padding:14px 16px 16px;
+        border:2px solid rgba(83,237,255,.55); border-radius:20px; background:rgba(5,16,30,.9);
+        box-shadow:0 12px 34px rgba(0,0,0,.45), 0 0 26px rgba(83,237,255,.18); color:var(--ink); }
+      .mission-card[hidden] { display:none; }
+      .mission-card .mc-chapter { display:block; color:var(--cyan); font-size:clamp(11px,.9vw,14px); font-weight:800; letter-spacing:.06em; }
+      .mission-card .mc-story { margin:6px 0 10px; color:#dbe8f7; font-size:clamp(12px,1vw,16px); line-height:1.5; }
+      .mission-card .mc-action { display:flex; align-items:center; gap:10px; font-size:clamp(14px,1.25vw,20px); font-weight:900; line-height:1.35; }
+      .mission-card .mc-icon { flex:none; font-size:clamp(26px,2.4vw,38px); }
+      .mission-card .mc-count { position:relative; width:clamp(68px,6vw,92px); aspect-ratio:1; margin:12px auto 0;
+        border-radius:50%; display:grid; place-items:center;
+        background:conic-gradient(var(--lime) calc(var(--p, 0) * 360deg), rgba(165,203,255,.16) 0); }
+      .mission-card .mc-count::before { content:""; position:absolute; inset:7px; border-radius:50%; background:#06121f; }
+      .mission-card .mc-count b { position:relative; color:var(--lime); font-size:clamp(28px,2.8vw,44px); font-weight:1000; font-style:italic; }
+      .mission-card .mc-next { display:none; margin-top:10px; padding-top:9px; border-top:1px solid var(--line); color:var(--muted); font-size:clamp(12px,.95vw,15px); }
+      .mission-card[data-state="go"] .mc-count b { font-size:clamp(22px,2.2vw,34px); }
+      .mission-card[data-state="go"] { border-color:var(--lime); }
+      .mission-card[data-state="result"] .mc-count, .mission-card[data-state="result"] .mc-story:empty { display:none; }
+      .mission-card[data-state="result"] .mc-next { display:block; }
+      .mission-card[data-state="result"][data-success="true"] { border-color:var(--lime); }
+      .mission-card[data-state="result"][data-success="false"] { border-color:rgba(196,181,253,.7); }
+      .mission-card.pop { animation:mission-card-pop .32s ease-out both; }
+      @keyframes mission-card-pop { from { opacity:0; transform:translateY(-50%) scale(.92); } to { opacity:1; transform:translateY(-50%) scale(1); } }
+
+      /* ジャンプ：STOP!! → 力をためる → JUMP!! */
+      .jump-charge { position:absolute; left:50%; top:15%; z-index:13; pointer-events:none; transform:translateX(-50%);
+        width:min(460px, 70%); text-align:center; }
+      .jump-charge[hidden] { display:none; }
+      .jump-charge .jc-title { display:block; font-size:clamp(44px,7vw,96px); font-weight:1000; font-style:italic; letter-spacing:-.03em; line-height:1;
+        color:#ffd84d; -webkit-text-stroke:2px #3a1d00; text-shadow:0 6px 0 rgba(58,29,0,.55), 0 0 22px rgba(255,216,77,.55); }
+      .jump-charge .jc-hint { display:inline-block; margin-top:8px; padding:6px 14px; border-radius:999px; background:rgba(5,16,30,.85);
+        color:#fff; font-size:clamp(14px,1.4vw,22px); font-weight:800; }
+      .jump-charge .jc-gauge { position:relative; height:clamp(16px,1.6vw,22px); margin:12px auto 0; width:86%; border-radius:999px;
+        background:rgba(5,16,30,.85); border:2px solid rgba(255,216,77,.7); overflow:hidden; }
+      .jump-charge .jc-gauge i { position:absolute; inset:0 auto 0 0; width:calc(var(--charge, 0) * 100%); border-radius:inherit;
+        background:linear-gradient(90deg,#ffb12e,#ffd84d 60%,#fff6b0); box-shadow:0 0 16px rgba(255,216,77,.8); transition:width .12s linear; }
+      .jump-charge[data-state="moved"] .jc-title { color:#ff8fa8; -webkit-text-stroke-color:#3d0614; }
+      .jump-charge[data-state="full"] .jc-title, .jump-charge[data-state="nice"] .jc-title { font-size:clamp(32px,4.6vw,64px); }
+      .jump-charge[data-state="full"] .jc-title { color:#ffe98a; }
+      .jump-charge[data-state="full"] .jc-gauge { animation:charge-glow .5s ease-in-out infinite alternate; }
+      .jump-charge[data-state="jump"] .jc-title, .jump-charge[data-state="nice"] .jc-title { color:var(--lime); -webkit-text-stroke-color:#123f41; text-shadow:0 6px 0 rgba(18,63,65,.6), 0 0 24px rgba(199,255,79,.7); }
+      .jump-charge[data-state="jump"] .jc-title { animation:jump-cue .45s ease-in-out infinite alternate; }
+      .jump-charge[data-state="jump"] .jc-gauge, .jump-charge[data-state="nice"] .jc-gauge { display:none; }
+      @keyframes charge-glow { to { box-shadow:0 0 22px rgba(255,216,77,.9); border-color:#fff6b0; } }
+      @keyframes jump-cue { to { transform:translateY(-10px) scale(1.06); } }
+      @media (max-width: 700px) {
+        .mission-card { right:10px; width:min(240px, 46%); padding:10px 12px 12px; }
+        .jump-charge { width:88%; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .mission-card.pop, .jump-charge[data-state="full"] .jc-gauge, .jump-charge[data-state="jump"] .jc-title { animation:none; }
+        .jump-charge .jc-gauge i { transition:none; }
+      }
     </style>
   </head>
   <body>
@@ -1384,6 +1438,20 @@
 
           <div id="score-popup" class="score-popup" role="status" aria-live="polite" aria-atomic="true" hidden><span id="score-popup-label"></span><strong id="score-popup-points"></strong></div>
           <div id="impact-text" class="impact-text" aria-hidden="true">STOMP!</div>
+
+          <div id="mission-card" class="mission-card" role="status" aria-live="polite" hidden>
+            <span id="mc-chapter" class="mc-chapter"></span>
+            <p id="mc-story" class="mc-story"></p>
+            <div class="mc-action"><span id="mc-icon" class="mc-icon" aria-hidden="true"></span><strong id="mc-action"></strong></div>
+            <div id="mc-count" class="mc-count" aria-hidden="true"><b id="mc-num">3</b></div>
+            <div id="mc-next" class="mc-next"></div>
+          </div>
+
+          <div id="jump-charge" class="jump-charge" role="status" aria-live="polite" hidden>
+            <strong id="jc-title" class="jc-title">STOP!!</strong>
+            <span id="jc-hint" class="jc-hint">ピタッと止まって、力をためよう</span>
+            <div class="jc-gauge" aria-hidden="true"><i></i></div>
+          </div>
 
           <div id="consent-overlay" class="consent-overlay" aria-live="polite">
             <div class="consent-card">
@@ -1795,6 +1863,33 @@
         if (delay) voiceTimer = window.setTimeout(start, delay);
         else start();
       }
+      // 再生中の音声を止めずに、終わってから次の音声を流す（予告音声が途中で切れないように）
+      function queueVoice(name, minDelay = 0) {
+        if (!voiceEnabled) return;
+        const current = activeVoice;
+        const queuedAt = performance.now();
+        window.clearTimeout(voiceTimer);
+        voiceTimer = null;
+        if (!current || current.ended) {
+          if (minDelay) voiceTimer = window.setTimeout(() => playVoice(name), minDelay);
+          else playVoice(name);
+          return;
+        }
+        // 再生終了（または読み込み失敗）を待つ。その間に別の音声が始まったら取り消す。
+        const generation = voiceGeneration;
+        let done = false;
+        const go = () => {
+          if (done) return;
+          done = true;
+          if (generation !== voiceGeneration) return;
+          const rest = minDelay - (performance.now() - queuedAt);
+          if (rest > 0) voiceTimer = window.setTimeout(() => playVoice(name), rest);
+          else window.setTimeout(() => { if (generation === voiceGeneration) playVoice(name); }, 60);
+        };
+        current.addEventListener("ended", go, { once: true });
+        current.addEventListener("error", go, { once: true });
+        voiceTimer = window.setTimeout(go, 5000); // 念のための上限
+      }
       let researchConsent = null;
       let researchSession = null;
       let researchDownloaded = false;
@@ -1954,6 +2049,12 @@
       let baselineRightSign = -1;            // 本人の右側が画像のどちら向きか（映像の左右反転に依存しない）
       let bendDepthThreshold = BEND_DEPTH_DEFAULT;
       let trackingLostSince = null;
+      const JUMP_CHARGE_MS = 800;            // ジャンプ前に「止まって力をためる」時間（旧：0.35秒の静止確認）
+      const MISSION_PREVIEW_MS = 3000;
+      // 予告の長さ（旧：一律3秒）。予告音声が長い場合は途中で切らず、次の音声を後ろに続ける。
+      // ねじりは受付時間が短いため、合図音声（twist-now）の開始時刻が従来と変わらない2.6秒にとどめる。
+      const PREVIEW_MS_BY_KIND = { jump: 2000, diagonal: 2000, twist: 2600 };
+      const MISSION_ICONS = { jump: "👾", diagonal: "🚧", twist: "🔮" };
       const FORM_EXCELLENT_SCORE = 88;
       const OBSTACLE_CHECK_DELAY_MS = 400;
       const OBSTACLE_TIMEOUT_MS = 5600;
@@ -2874,7 +2975,7 @@
         const med3=(key)=>{const v=raw.map(q=>q[key]).sort((a,b)=>a-b);return v[Math.floor(v.length/2)];};
         return {reset,update(input){
           const h=Math.max(.010,(input.torso || .25)*.06);
-          const empty={detected:false,landed:false,rise:0,threshold:h,ready:false};
+          const empty={detected:false,landed:false,rise:0,threshold:h,ready:false,charge:0};
           if(!Number.isFinite(input.hip)||!Number.isFinite(input.shoulder)){reset();return empty;}
           if(previous && (input.now<=previous.now || input.now-previous.now>300 ||
             Math.abs(input.hip-previous.hip)>.12 || Math.abs(input.shoulder-previous.shoulder)>.12))reset();
@@ -2884,16 +2985,17 @@
           const old=previous; previous={...p};
           if(!base){
             stable.push({...p});
-            while(stable.length>1 && p.now-stable[1].now>=420)stable.shift();
+            while(stable.length>1 && p.now-stable[1].now>=JUMP_CHARGE_MS+70)stable.shift();
             const spread=key=>Math.max(...stable.map(v=>v[key]))-Math.min(...stable.map(v=>v[key]));
             // 旧: h×0.3（720pで約3px）。骨格の揺れだけで基準が取れず「まっすぐ立ってね」から進めなかった。
-            const allowed=Math.max(h*.8,.008);
+            const allowed=Math.max(h*1.0,.009);
             if(spread("hip")>allowed || spread("shoulder")>allowed)stable=[{...p}];
-            if(p.now-stable[0].now>=350){
+            // 「STOP!! 力をためる」：静止が JUMP_CHARGE_MS 続いたら基準を確定する
+            if(p.now-stable[0].now>=JUMP_CHARGE_MS){
               base={hip:stable.reduce((a,v)=>a+v.hip,0)/stable.length,
                 shoulder:stable.reduce((a,v)=>a+v.shoulder,0)/stable.length};
             }
-            return {...empty,ready:!!base};
+            return {...empty,ready:!!base,charge:base?1:Math.min(1,(p.now-stable[0].now)/JUMP_CHARGE_MS)};
           }
           const hipRise=base.hip-p.hip, shoulderRise=base.shoulder-p.shoulder;
           const rise=Math.min(hipRise,shoulderRise);
@@ -2924,37 +3026,79 @@
             else groundSince=null;
             if(groundSince!==null && p.now-groundSince>=80){landed=true;reset();}
           }
-          return {detected,landed,rise,threshold:h,ready:true};
+          return {detected,landed,rise,threshold:h,ready:true,charge:1};
         }};
       }
       const simpleJumpTracker=createSimpleJumpTracker();
       let jumpCueReady=false;
       let lastBattleClockAt=null;
+      const jumpChargeEl = document.querySelector("#jump-charge");
+      const jumpChargeView = { state: "", shownAt: 0, lastCharge: 0, movedAt: -Infinity, earlyAt: -Infinity };
+      function renderJumpCharge(state, charge, hint, now = performance.now()) {
+        if (jumpChargeView.state !== state) {
+          jumpChargeView.state = state;
+          jumpChargeView.shownAt = now;
+          if (state === "full") playSound("dataDisplay", 0.42);
+        }
+        jumpChargeEl.hidden = false;
+        jumpChargeEl.dataset.state = state;
+        jumpChargeEl.style.setProperty("--charge", String(Math.max(0, Math.min(1, charge))));
+        document.querySelector("#jc-title").textContent = { stop: "STOP!!", moved: "STOP!!", full: "パワー満タン！", jump: "JUMP!!", nice: "ナイスジャンプ！" }[state];
+        document.querySelector("#jc-hint").textContent = hint;
+      }
+      function hideJumpCharge() {
+        if (jumpChargeEl.hidden) return;
+        jumpChargeEl.hidden = true;
+        jumpChargeView.state = "";
+        jumpChargeView.lastCharge = 0;
+      }
+      // ジャンプの受付中以外は隠す。成功表示は0.9秒で消す（毎フレーム呼ぶ）
+      function refreshJumpCharge(now) {
+        const jumpPhase = isHipJumpPhase() && baselineHipY != null &&
+          (gameMode !== "battle" || battleMission?.phase === "preparing" || battleMission?.phase === "active");
+        if (!jumpPhase || (jumpChargeView.state === "nice" && now - jumpChargeView.shownAt > 900)) hideJumpCharge();
+      }
+      function updateJumpChargeView(result, now) {
+        if (jumpChargeView.state === "nice") return;
+        if (result.detected) { renderJumpCharge("nice", 1, "やさしく着地しよう", now); return; }
+        const charge = result.charge ?? (result.ready ? 1 : 0);
+        if (!result.ready && charge + 0.25 < jumpChargeView.lastCharge) jumpChargeView.movedAt = now;
+        jumpChargeView.lastCharge = charge;
+        if (jumpCueReady) { renderJumpCharge("jump", 1, "その場で 軽く1回 跳ぼう！", now); return; }
+        if (result.ready) { renderJumpCharge("full", 1, "合図で ジャンプ！", now); return; }
+        if (now - jumpChargeView.earlyAt < 1400) { renderJumpCharge("moved", charge, "まだだよ！ 止まって力をためてから跳ぼう", now); return; }
+        if (now - jumpChargeView.movedAt < 1000) { renderJumpCharge("moved", charge, "動いちゃった！ もう一度ピタッと止まろう", now); return; }
+        renderJumpCharge("stop", charge, "ピタッと止まって、力をためよう", now);
+      }
+
       function sampleSimpleJump(lm,now){
         const result=simpleJumpTracker.update({now,hip:average(lm[23].y,lm[24].y),shoulder:average(lm[11].y,lm[12].y),torso:Math.max(baselineTorsoLength || .25,.10)});
         if (!result.ready) jumpCueReady=false;
         if (!jumpCueReady && result.detected) {
           simpleJumpTracker.reset();
-          result.detected=false; result.ready=false;
+          result.detected=false; result.ready=false; result.charge=0;
+          jumpChargeView.earlyAt=now;
         }
         // 本番の受付中に一度でも基準を取り直すと、旧実装では合図が二度と出ず、そのジャンプは
         // 時間切れまで絶対に成功しなかった。受付中は合図音なしで静かに再び受け付ける。
         if (result.ready && !jumpCueReady && gameMode === "battle" && battleMission?.phase === "active" && battleMission.kind === "jump") {
           jumpCueReady = true;
-          setStatus("準備OK！ ジャンプ！", "軽く1回跳ぼう");
+          setStatus("JUMP!! もう一度どうぞ", "その場で軽く1回跳ぼう");
         }
         if (result.ready && !jumpCueReady && !activeVoice && (gameMode !== "battle" || battleMission?.phase === "preparing")) {
           jumpCueReady=true;
           playVoice("jump-now");
-          setStatus("準備OK！ ジャンプ！", "肩と腰が一緒に上がるよう、軽く1回跳ぼう");
+          setStatus("JUMP!!", "その場で軽く1回跳ぼう");
           if (gameMode === "battle") {
             battleMission.phase="active";
+            battleMission.activeAt=now;
             battleMission.until=now+12000;
             document.querySelector("#skip-jump-ready").hidden=true;
             recordResearchEvent("mission_start",{action:"jump",durationMs:12000});
           }
         }
-        result.hint=!jumpCueReady ? "まっすぐ立ってね。ジャンプの合図を待とう" : result.detected ? "ジャンプできた！ やさしく着地しよう" : "準備OK！ 軽く1回ジャンプしよう";
+        result.hint=!jumpCueReady ? (result.ready ? "パワー満タン！ 合図でジャンプ" : "STOP!! ピタッと止まって力をためよう") : result.detected ? "ジャンプできた！ やさしく着地しよう" : "JUMP!! 軽く1回ジャンプしよう";
+        updateJumpChargeView(result, now);
         const ratio=Math.max(0,Math.min(result.rise/result.threshold,1.25));
         jumpMeter.style.width=`${Math.min(ratio*100,100)}%`;
         jumpValue.textContent=`${Math.round(ratio*100)}%`;
@@ -2967,6 +3111,7 @@
       let stableJumpContext = "";
       function resetStableJump() {
         jumpCueReady=false;
+        if (jumpChargeView.state === "nice" || jumpChargeView.state === "jump") hideJumpCharge();
         simpleJumpTracker.reset();
         stableJumpTracker.reset();
         cameraJumpDetectedAt = -Infinity;
@@ -3766,7 +3911,10 @@
         }
         const kind=missionDeck.shift();missionIndex++;
         clearTutorialObjects();resetStableJump();enemyReady=true;
-        battleMission={kind,phase:"preview",until:now+3000,startScore:score};
+        const previewMs=PREVIEW_MS_BY_KIND[kind] ?? MISSION_PREVIEW_MS;
+        // 斜め下は予告の時点で左右を決め、予告カードに「右／左足先へ」と出す
+        const side=kind==="diagonal" ? (Math.random()<0.5 ? "left" : "right") : null;
+        battleMission={kind,phase:"preview",until:now+previewMs,previewMs,side,startScore:score,round:missionRound,index:missionIndex};
         playVoice({jump:"jump-next",diagonal:"bend-next",twist:"twist-next"}[kind]);
         shell.dataset.action=kind;
         showFormCoach(kind,missionStories[kind][1]);
@@ -3775,6 +3923,58 @@
         recordResearchEvent("mission_preview",{round:missionRound,index:missionIndex,action:kind});
       }
       let storyVoiceLevel = 0;
+      // 予告中（3秒）とクールダウン中の待ち時間を「何が起きているか分かる時間」にする
+      const missionCardEl = document.querySelector("#mission-card");
+      let missionCardKey = "";
+      function updateMissionCard(now) {
+        const m = gameMode === "battle" ? battleMission : null;
+        let state = null;
+        if (m?.phase === "preview") state = "preview";
+        else if (m?.phase === "active" && m.kind !== "jump" && now - (m.activeAt ?? -Infinity) < 700) state = "go";
+        else if (m?.phase === "cooldown" && m.result && now - m.result.at >= 900) state = "result";
+        if (!state) { missionCardEl.hidden = true; missionCardKey = ""; return; }
+        const key = `${m.round}:${m.index}:${state}`;
+        if (key !== missionCardKey) {
+          missionCardKey = key;
+          missionCardEl.dataset.state = state;
+          missionCardEl.classList.remove("pop"); void missionCardEl.offsetWidth; missionCardEl.classList.add("pop");
+          const story = missionStories[m.kind];
+          if (state === "result") {
+            const next = m.result.next;
+            missionCardEl.dataset.success = String(m.result.success);
+            document.querySelector("#mc-chapter").textContent = `${m.round}章 ${m.index}/3 クリア`;
+            // 得点は左のポップアップで表示済みなので、ここでは「物語」と「次の予告」を出す
+            document.querySelector("#mc-icon").textContent = next ? MISSION_ICONS[next] : "🏁";
+            document.querySelector("#mc-action").textContent = next
+              ? `次は ${missionStories[next][1].split("：")[0]}`
+              : `${m.round}章クリア！ 次の通りへ`;
+            document.querySelector("#mc-story").textContent = m.storyLine
+              ? `📻 ラジ「${m.storyLine}」`
+              : m.result.success ? "📻 ラジ「いいね！ その調子！」" : "📻 ラジ「おしい！ 次でとりかえそう！」";
+            document.querySelector("#mc-next").textContent = next ? "お手本を見て準備しよう" : "次の章は順番が変わるよ";
+          } else {
+            delete missionCardEl.dataset.success;
+            document.querySelector("#mc-chapter").textContent = `街を救う旅 ${m.round}章・${m.index}/3`;
+            document.querySelector("#mc-icon").textContent = MISSION_ICONS[m.kind];
+            document.querySelector("#mc-story").textContent = `📻 ラジ「${story[0]}」`;
+            document.querySelector("#mc-action").textContent = m.kind === "diagonal" && m.side
+              ? `${m.side === "left" ? "右" : "左"}足先へ斜め下 → 胸を開く`
+              : story[1];
+          }
+          missionCardEl.hidden = false;
+        }
+        const num = document.querySelector("#mc-num");
+        const count = document.querySelector("#mc-count");
+        if (state === "preview") {
+          const left = Math.max(0, m.until - now);
+          const total = m.previewMs || MISSION_PREVIEW_MS;
+          count.style.setProperty("--p", String(1 - left / total));
+          num.textContent = left <= 250 ? (m.kind === "jump" ? "STOP" : "GO!") : String(Math.ceil(left / 1000));
+        } else if (state === "go") {
+          count.style.setProperty("--p", "1");
+          num.textContent = "GO!";
+        }
+      }
       function updateBattleMission(now){
         const m=battleMission;if(!m)return;
         if(m.phase==="preparing")return;
@@ -3788,12 +3988,13 @@
           if(m.kind==="jump"){
             m.phase="preparing";
             resetStableJump();
-            setStatus("まっすぐ立ってね", "肩と腰が約0.35秒安定したら、ジャンプの合図が出ます");
-            playVoice("stand-ready");
+            setStatus("STOP!! 力をためよう", "ピタッと止まるとパワーがたまり、ジャンプの合図が出ます");
+            queueVoice("stand-ready");
             document.querySelector("#skip-jump-ready").hidden=false;
             return;
           }
           m.phase="active";
+          m.activeAt=now;
           const duration={jump:12000,diagonal:OBSTACLE_TIMEOUT_MS,twist:REFLECT_TIMEOUT_MS}[m.kind];
           m.until=now+duration;
           if(m.kind==="diagonal")startObstacle(now);
@@ -3817,7 +4018,9 @@
           storyVoiceLevel = level;
           playVoice(["success", ["", "city-lights", "city-flowers", "city-morning"][level]]);
           m.storyVoiceUntil = now + 12000;
+          m.storyLine = storyProgress(score).message;
         }
+        m.result = { success, points: score - m.startScore, next, at: now };
         recordResearchEvent("mission_finish",{round:missionRound,index:missionIndex,action:m.kind,success,points:score-m.startScore});
         if(!next)recordResearchEvent("mission_round_complete",{round:missionRound});
       }
@@ -3904,7 +4107,8 @@
         pauseLabel.hidden=!paused || gameMode!=="battle";
       }
       function updateBattleClock(now) {
-        if (gameMode !== "battle") updateTimeBar(0, false);
+        if (gameMode !== "battle") { updateTimeBar(0, false); updateMissionCard(now); }
+        refreshJumpCharge(now);
         updateStory();
         document.querySelector("#skip-jump-ready").hidden=!(gameMode==="battle" && battleMission?.phase==="preparing");
         if (gameMode === "battle") {
@@ -3914,6 +4118,7 @@
           const remaining = battleEndsAt - now;
           updateTimeBar(remaining, battleMission?.phase==="preparing");
           if(remaining>0)updateBattleMission(now);
+          updateMissionCard(now);
           battleTimer.textContent = formatTime(remaining);
           timerCard.classList.toggle("warning", remaining <= 30000);
           if (remaining <= 0) finishBattle(now);
@@ -4230,7 +4435,7 @@
           diagonalDownSeenAt = now;
           obstacleZone.className = "obstacle-zone";
           obstacleZone.setAttribute("aria-hidden", "true");
-          playVoice("chest-open");
+          queueVoice("chest-open"); // 予告音声が残っていれば言い終わってから（最大約1秒）
           setStatus("前半OK！", "上体を起こして、両腕を大きく開いてください");
         }
         const combined = (diagonalDownQuality + r.quality) / 2;
@@ -4279,7 +4484,7 @@
       }
 
       function startBossAttack(now) {
-        playVoice("twist-now", REFLECT_CHECK_DELAY_MS);
+        queueVoice("twist-now", REFLECT_CHECK_DELAY_MS);
         actionTrackingLost = false;
         shell.dataset.action = "twist";
         resetTwistMotion();
@@ -4353,9 +4558,10 @@
         diagonalDownSeenAt = -Infinity;
         bestObstacleQuality = 0;
         bendTracker.reset();
-        obstacleSide = Math.random() < 0.5 ? "left" : "right";
+        obstacleSide = gameMode === "battle" && battleMission?.kind === "diagonal" && battleMission.side
+          ? battleMission.side : (Math.random() < 0.5 ? "left" : "right");
         const requiredLabel = obstacleSide === "left" ? "右" : "左";
-        playVoice(obstacleSide === "left" ? "bend-right" : "bend-left");
+        queueVoice(obstacleSide === "left" ? "bend-right" : "bend-left");
         const incomingLabel = obstacleSide === "left" ? "左" : "右";
         obstacleZone.className = `obstacle-zone from-${obstacleSide}`;
         obstacleZone.setAttribute("aria-hidden", "false");
