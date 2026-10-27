@@ -1329,6 +1329,21 @@
       .mission-card[data-state="result"][data-success="false"] { border-color:rgba(196,181,253,.7); }
       .mission-card.pop { animation:mission-card-pop .32s ease-out both; }
       @keyframes mission-card-pop { from { opacity:0; transform:translateY(-50%) scale(.92); } to { opacity:1; transform:translateY(-50%) scale(1); } }
+      /* カメラ画面が低いとき（1366×768のノートPCなど）は「結果を見る」ボタンの下に小さくまとめる */
+      .mission-card.compact { top:150px; transform:none; width:min(290px, 42%); padding:10px 12px;
+        display:grid; grid-template-columns:1fr auto; column-gap:10px; align-items:center; }
+      .mission-card.compact .mc-chapter, .mission-card.compact .mc-story, .mission-card.compact .mc-next { grid-column:1 / -1; }
+      .mission-card.compact .mc-story { margin:4px 0 6px; font-size:12px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+      .mission-card.compact[data-state="preview"] .mc-story, .mission-card.compact[data-state="go"] .mc-story { display:none; }
+      .mission-card.compact .mc-action { font-size:14px; gap:6px; }
+      .mission-card.compact .mc-icon { font-size:24px; }
+      .mission-card.compact .mc-count { width:54px; margin:0; }
+      .mission-card.compact .mc-count::before { inset:5px; }
+      .mission-card.compact .mc-count b { font-size:22px; }
+      .mission-card.compact[data-state="go"] .mc-count b { font-size:16px; }
+      .mission-card.compact .mc-next { margin-top:6px; padding-top:6px; font-size:12px; }
+      .mission-card.compact.pop { animation-name:mission-card-pop-compact; }
+      @keyframes mission-card-pop-compact { from { opacity:0; transform:scale(.92); } to { opacity:1; transform:none; } }
 
       /* ジャンプ：STOP!! → 力をためる → JUMP!! */
       .jump-charge { position:absolute; left:50%; top:15%; z-index:13; pointer-events:none; transform:translateX(-50%);
@@ -2050,6 +2065,13 @@
       let bendDepthThreshold = BEND_DEPTH_DEFAULT;
       let trackingLostSince = null;
       const JUMP_CHARGE_MS = 800;            // ジャンプ前に「止まって力をためる」時間（旧：0.35秒の静止確認）
+      // ジャンプで先へ進めなくならないための上限
+      const JUMP_CHARGE_FALLBACK_MS = 2500;  // STOP!! がこの時間満タンにならなければ、その時点の姿勢を基準に JUMP!! を出す
+      const JUMP_PREPARE_MAX_MS = 8000;      // 本番：準備（時間停止中）がこの時間を超えたら自動で次の挑戦へ
+      const JUMP_ACTIVE_MS = 7000;           // 本番：JUMP!! の合図からの受付時間（旧12秒）
+      const JUMP_RETRY_MS = 4000;            // JUMP!! から4秒判定されなければ STOP!! に戻して基準を取り直す
+      const JUMP_PRACTICE_MAX_MS = 15000;    // 練習・チュートリアルのジャンプは15秒で自動的に次へ
+      let jumpStageStartedAt = null;
       const MISSION_PREVIEW_MS = 3000;
       // 予告の長さ（旧：一律3秒）。予告音声が長い場合は途中で切らず、次の音声を後ろに続ける。
       // ねじりは受付時間が短いため、合図音声（twist-now）の開始時刻が従来と変わらない2.6秒にとどめる。
@@ -2973,7 +2995,15 @@
         let base=null, previous=null, stable=[], air=false, riseSince=null, groundSince=null, upAt=-Infinity, changedAt=null, raw=[];
         const reset=()=>{base=null;previous=null;stable=[];air=false;riseSince=null;groundSince=null;upAt=-Infinity;changedAt=null;raw=[];};
         const med3=(key)=>{const v=raw.map(q=>q[key]).sort((a,b)=>a-b);return v[Math.floor(v.length/2)];};
-        return {reset,update(input){
+        // 静止が確認できなくても、直近の姿勢の平均を基準にして受付を始める（進行が止まらないように）
+        const forceBase=()=>{
+          if(base || !previous) return false;
+          const src=stable.length ? stable : [previous];
+          base={hip:src.reduce((a,v)=>a+v.hip,0)/src.length, shoulder:src.reduce((a,v)=>a+v.shoulder,0)/src.length};
+          changedAt=null;
+          return true;
+        };
+        return {reset,forceBase,update(input){
           const h=Math.max(.010,(input.torso || .25)*.06);
           const empty={detected:false,landed:false,rise:0,threshold:h,ready:false,charge:0};
           if(!Number.isFinite(input.hip)||!Number.isFinite(input.shoulder)){reset();return empty;}
@@ -3065,14 +3095,31 @@
         if (!result.ready && charge + 0.25 < jumpChargeView.lastCharge) jumpChargeView.movedAt = now;
         jumpChargeView.lastCharge = charge;
         if (jumpCueReady) { renderJumpCharge("jump", 1, "その場で 軽く1回 跳ぼう！", now); return; }
+        if (result.ready && jumpChargeView.forced) { renderJumpCharge("full", 1, "OK！ 合図で ジャンプ！", now); return; }
         if (result.ready) { renderJumpCharge("full", 1, "合図で ジャンプ！", now); return; }
+        if (now - (jumpChargeView.retryAt ?? -Infinity) < 1600) { renderJumpCharge("moved", charge, "もう一度！ 止まって力をためてから跳ぼう", now); return; }
         if (now - jumpChargeView.earlyAt < 1400) { renderJumpCharge("moved", charge, "まだだよ！ 止まって力をためてから跳ぼう", now); return; }
         if (now - jumpChargeView.movedAt < 1000) { renderJumpCharge("moved", charge, "動いちゃった！ もう一度ピタッと止まろう", now); return; }
         renderJumpCharge("stop", charge, "ピタッと止まって、力をためよう", now);
       }
 
       function sampleSimpleJump(lm,now){
+        jumpChargeView.stopSince ??= now;
         const result=simpleJumpTracker.update({now,hip:average(lm[23].y,lm[24].y),shoulder:average(lm[11].y,lm[12].y),torso:Math.max(baselineTorsoLength || .25,.10)});
+        if (!result.ready && now - jumpChargeView.stopSince >= JUMP_CHARGE_FALLBACK_MS && simpleJumpTracker.forceBase()) {
+          // 体の揺れが大きくゲージが満タンにならない場合でも、2.5秒たったら先へ進める
+          result.ready=true; result.charge=1; jumpChargeView.forced=true;
+          recordResearchEvent("jump_charge_fallback",{waitedMs:Math.round(now-jumpChargeView.stopSince)});
+        }
+        if (result.ready) jumpChargeView.stopSince = now; else if (!result.ready && jumpChargeView.lastReady) jumpChargeView.stopSince = now;
+        jumpChargeView.lastReady = result.ready;
+        if (jumpCueReady && !result.detected && now - (jumpChargeView.cueAt ?? now) >= JUMP_RETRY_MS) {
+          // 跳んだのに判定されない（体の位置がずれた等）ときは、基準を取り直してもう一度
+          simpleJumpTracker.reset();
+          result.ready=false; result.charge=0;
+          jumpChargeView.stopSince=now; jumpChargeView.retryAt=now;
+          recordResearchEvent("jump_retry",{afterMs:JUMP_RETRY_MS});
+        }
         if (!result.ready) jumpCueReady=false;
         if (!jumpCueReady && result.detected) {
           simpleJumpTracker.reset();
@@ -3083,18 +3130,20 @@
         // 時間切れまで絶対に成功しなかった。受付中は合図音なしで静かに再び受け付ける。
         if (result.ready && !jumpCueReady && gameMode === "battle" && battleMission?.phase === "active" && battleMission.kind === "jump") {
           jumpCueReady = true;
+          jumpChargeView.cueAt = now;
           setStatus("JUMP!! もう一度どうぞ", "その場で軽く1回跳ぼう");
         }
         if (result.ready && !jumpCueReady && !activeVoice && (gameMode !== "battle" || battleMission?.phase === "preparing")) {
           jumpCueReady=true;
+          jumpChargeView.cueAt=now;
           playVoice("jump-now");
           setStatus("JUMP!!", "その場で軽く1回跳ぼう");
           if (gameMode === "battle") {
             battleMission.phase="active";
             battleMission.activeAt=now;
-            battleMission.until=now+12000;
+            battleMission.until=now+JUMP_ACTIVE_MS;
             document.querySelector("#skip-jump-ready").hidden=true;
-            recordResearchEvent("mission_start",{action:"jump",durationMs:12000});
+            recordResearchEvent("mission_start",{action:"jump",durationMs:JUMP_ACTIVE_MS});
           }
         }
         result.hint=!jumpCueReady ? (result.ready ? "パワー満タン！ 合図でジャンプ" : "STOP!! ピタッと止まって力をためよう") : result.detected ? "ジャンプできた！ やさしく着地しよう" : "JUMP!! 軽く1回ジャンプしよう";
@@ -3111,6 +3160,7 @@
       let stableJumpContext = "";
       function resetStableJump() {
         jumpCueReady=false;
+        jumpChargeView.stopSince=null; jumpChargeView.lastReady=false; jumpChargeView.forced=false; jumpChargeView.cueAt=null; jumpChargeView.retryAt=null;
         if (jumpChargeView.state === "nice" || jumpChargeView.state === "jump") hideJumpCharge();
         simpleJumpTracker.reset();
         stableJumpTracker.reset();
@@ -3454,6 +3504,7 @@
       }
 
       function setTrainingStage(stage) {
+        jumpStageStartedAt = null;
         playVoice(stage === 0 && !calibrationSkipped ? ["suit-ready", "twist-now"] : ["twist-now", "stand-ready", "bend-next"][stage]);
         trainingStage = stage;
         trainingLocked = false;
@@ -3570,6 +3621,12 @@
         }
 
         if (trainingStage === 1) {
+          jumpStageStartedAt ??= performance.now();
+          if (performance.now() - jumpStageStartedAt >= JUMP_PRACTICE_MAX_MS) {
+            trainingCue.textContent = "ジャンプは本番でも練習できるよ。次へ進もう！";
+            skipCurrentAdjustment();
+            return;
+          }
           const hipRise = baselineHipY - hipY;
           const ankleRise = baselineAnkleY - ankleY;
           const jump = sampleSimpleJump(lm, performance.now());
@@ -3681,6 +3738,7 @@
       }
 
       function showTutorialStage(stage) {
+        jumpStageStartedAt = null;
         playVoice(["stand-ready", "bend-right", "twist-now"][stage]);
         resetTwistMotion();
         bendTracker.reset();
@@ -3828,6 +3886,8 @@
         if (tutorialLocked) return;
 
         if (tutorialStage === 0) {
+          jumpStageStartedAt ??= now;
+          if (now - jumpStageStartedAt >= JUMP_PRACTICE_MAX_MS) { skipTutorialStage(); return; }
           const jump = sampleSimpleJump(lm, now);
           tutorialCue.textContent=jump.hint;
           if(jump.detected){ playSound("jump",.66);completeTutorialStage();tutorialCue.textContent="1回ジャンプできた！ やさしく着地しよう"; }
@@ -3923,6 +3983,18 @@
         recordResearchEvent("mission_preview",{round:missionRound,index:missionIndex,action:kind});
       }
       let storyVoiceLevel = 0;
+      function skipJumpPreparation(reason){
+        if(gameMode!=="battle" || battleMission?.phase!=="preparing")return;
+        playVoice("next");
+        const now=performance.now();
+        battleMission.phase="cooldown";battleMission.until=now+1200;
+        battleMission.result={success:false,points:0,next:missionDeck[0],at:now-900};
+        lastMission=battleMission.kind;
+        document.querySelector("#skip-jump-ready").hidden=true;
+        resetStableJump();
+        announceOutcome("retry","次の挑戦へ進みます",reason==="timeout" ? "ジャンプの準備ができなかったので、次へ進みます" : "このジャンプはスキップしました");
+        recordResearchEvent("mission_skipped",{action:"jump",reason:reason==="timeout" ? "preparation_timeout" : "preparation"});
+      }
       // 予告中（3秒）とクールダウン中の待ち時間を「何が起きているか分かる時間」にする
       const missionCardEl = document.querySelector("#mission-card");
       let missionCardKey = "";
@@ -3963,6 +4035,14 @@
           }
           missionCardEl.hidden = false;
         }
+        const compact = shell.clientHeight < 600;
+        missionCardEl.classList.toggle("compact", compact);
+        if (compact) {
+          // 「ここまでの結果を見る」ボタンの下端に合わせる（折り返しで高さが変わっても重ならない）
+          const button = document.querySelector("#finish-battle-button");
+          const top = button && !button.hidden ? button.offsetTop + button.offsetHeight + 8 : 110;
+          missionCardEl.style.top = `${top}px`;
+        } else missionCardEl.style.top = "";
         const num = document.querySelector("#mc-num");
         const count = document.querySelector("#mc-count");
         if (state === "preview") {
@@ -3977,7 +4057,11 @@
       }
       function updateBattleMission(now){
         const m=battleMission;if(!m)return;
-        if(m.phase==="preparing")return;
+        if(m.phase==="preparing"){
+          // 肩と腰が映らない等で準備が終わらないときも、時間停止のまま止まらないようにする
+          if(now-(m.preparingAt??now)>=JUMP_PREPARE_MAX_MS)skipJumpPreparation("timeout");
+          return;
+        }
         if(m.phase==="cooldown"){
           if (m.storyVoiceUntil && activeVoice && now < m.storyVoiceUntil) return;
           if(now>=m.until)prepareBattleMission(now);
@@ -3987,6 +4071,7 @@
           if(now<m.until)return;
           if(m.kind==="jump"){
             m.phase="preparing";
+            m.preparingAt=now;
             resetStableJump();
             setStatus("STOP!! 力をためよう", "ピタッと止まるとパワーがたまり、ジャンプの合図が出ます");
             queueVoice("stand-ready");
@@ -3995,7 +4080,7 @@
           }
           m.phase="active";
           m.activeAt=now;
-          const duration={jump:12000,diagonal:OBSTACLE_TIMEOUT_MS,twist:REFLECT_TIMEOUT_MS}[m.kind];
+          const duration={jump:JUMP_ACTIVE_MS,diagonal:OBSTACLE_TIMEOUT_MS,twist:REFLECT_TIMEOUT_MS}[m.kind];
           m.until=now+duration;
           if(m.kind==="diagonal")startObstacle(now);
           else if(m.kind==="twist")startBossAttack(now);
@@ -4850,14 +4935,7 @@
           : "ゲーム開始時にブラウザが選んだカメラを使用します。";
       });
       startButton.addEventListener("click", startGame);
-      document.querySelector("#skip-jump-ready").addEventListener("click",()=>{
-        if(gameMode!=="battle" || battleMission?.phase!=="preparing")return;
-        playVoice("next");
-        battleMission.phase="cooldown";battleMission.until=performance.now()+1000;
-        lastMission=battleMission.kind;
-        document.querySelector("#skip-jump-ready").hidden=true;
-        recordResearchEvent("mission_skipped",{action:"jump",reason:"preparation"});
-      });
+      document.querySelector("#skip-jump-ready").addEventListener("click",()=>skipJumpPreparation("button"));
       soundToggle.addEventListener("click", toggleSound);
       document.querySelector("#voice-toggle").addEventListener("click", (event) => {
         voiceEnabled = !voiceEnabled;
