@@ -2106,8 +2106,7 @@
       const JUMP_PREPARE_MAX_MS = 8000;      // 本番：準備（時間停止中）がこの時間を超えたら自動で次の挑戦へ
       const JUMP_ACTIVE_MS = 7000;           // 本番：JUMP!! の合図からの受付時間（旧12秒）
       const JUMP_RETRY_MS = 4000;            // JUMP!! から4秒判定されなければ STOP!! に戻して基準を取り直す
-      const JUMP_PRACTICE_MAX_MS = 15000;    // 練習・チュートリアルのジャンプは15秒で自動的に次へ
-      let jumpStageStartedAt = null;
+
       const MISSION_PREVIEW_MS = 3000;
       // 予告の長さ（旧：一律3秒）。予告音声が長い場合は途中で切らず、次の音声を後ろに続ける。
       // ねじりは受付時間が短いため、合図音声（twist-now）の開始時刻が従来と変わらない2.6秒にとどめる。
@@ -3542,7 +3541,6 @@
       }
 
       function setTrainingStage(stage) {
-        jumpStageStartedAt = null;
         playVoice(stage === 0 && !calibrationSkipped ? ["suit-ready", "twist-now"] : ["twist-now", "stand-ready", "bend-next"][stage]);
         trainingStage = stage;
         trainingLocked = false;
@@ -3659,12 +3657,6 @@
         }
 
         if (trainingStage === 1) {
-          jumpStageStartedAt ??= performance.now();
-          if (performance.now() - jumpStageStartedAt >= JUMP_PRACTICE_MAX_MS) {
-            trainingCue.textContent = "ジャンプは本番でも練習できるよ。次へ進もう！";
-            skipCurrentAdjustment();
-            return;
-          }
           const hipRise = baselineHipY - hipY;
           const ankleRise = baselineAnkleY - ankleY;
           const jump = sampleSimpleJump(lm, performance.now());
@@ -3776,7 +3768,6 @@
       }
 
       function showTutorialStage(stage) {
-        jumpStageStartedAt = null;
         playVoice(["stand-ready", "bend-right", "twist-now"][stage]);
         resetTwistMotion();
         bendTracker.reset();
@@ -3924,8 +3915,6 @@
         if (tutorialLocked) return;
 
         if (tutorialStage === 0) {
-          jumpStageStartedAt ??= now;
-          if (now - jumpStageStartedAt >= JUMP_PRACTICE_MAX_MS) { skipTutorialStage(); return; }
           const jump = sampleSimpleJump(lm, now);
           tutorialCue.textContent=jump.hint;
           if(jump.detected){ playSound("jump",.66);completeTutorialStage();tutorialCue.textContent="1回ジャンプできた！ やさしく着地しよう"; }
