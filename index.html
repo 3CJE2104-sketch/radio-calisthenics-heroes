@@ -1374,10 +1374,45 @@
         .mission-card.pop, .jump-charge[data-state="full"] .jc-gauge, .jump-charge[data-state="jump"] .jc-title { animation:none; }
         .jump-charge .jc-gauge i { transition:none; }
       }
+      /* 判定エリア（横の範囲）とプレイヤー固定の設定 */
+      .area-panel { position:fixed; top:74px; right:18px; z-index:60; width:min(360px, calc(100vw - 32px));
+        padding:16px 18px; border:1px solid rgba(83,237,255,.45); border-radius:18px; background:rgba(5,14,27,.97);
+        box-shadow:0 18px 50px rgba(0,0,0,.55); color:var(--ink); font-size:14px; }
+      .area-panel[hidden] { display:none; }
+      .area-panel h2 { margin:0 0 4px; font-size:16px; }
+      .area-panel p { margin:0 0 12px; color:var(--muted); font-size:12px; line-height:1.6; }
+      .area-panel label { display:block; margin:12px 0 4px; font-weight:800; }
+      .area-panel label span { float:right; color:var(--lime); font-variant-numeric:tabular-nums; }
+      .area-panel input[type="range"] { width:100%; accent-color:var(--cyan); }
+      .area-panel .area-scale { display:flex; justify-content:space-between; color:var(--muted); font-size:11px; }
+      .area-panel .area-check { display:flex; gap:8px; align-items:flex-start; margin-top:14px; font-weight:700; line-height:1.5; }
+      .area-panel .area-check input { margin-top:4px; accent-color:var(--cyan); }
+      .area-panel .area-check small { display:block; color:var(--muted); font-weight:400; font-size:11px; }
+      .area-panel .area-actions { display:flex; gap:8px; margin-top:14px; }
+      .area-panel .area-actions button { flex:1; min-width:0; }
+      .area-panel .area-status { margin-top:10px; padding:7px 10px; border-radius:10px; background:rgba(83,237,255,.08); color:#cfe9ff; font-size:12px; }
+      .sound-toggle.active { background:rgba(83,237,255,.16); border-color:rgba(83,237,255,.7); color:#fff; }
     </style>
   </head>
   <body>
     <main class="app">
+      <section id="area-panel" class="area-panel" aria-label="判定エリアの設定" hidden>
+        <h2>判定エリア</h2>
+        <p>カメラ映像の暗くした部分にいる人は判定しません。高さはそのままで、横の範囲だけを狭められます。両腕を広げても入る幅にしてください。</p>
+        <label for="area-width">横の幅 <span id="area-width-value">100%</span></label>
+        <input id="area-width" type="range" min="30" max="100" step="1" value="100">
+        <div class="area-scale"><span>せまい</span><span>全体</span></div>
+        <label for="area-center">位置 <span id="area-center-value">中央</span></label>
+        <input id="area-center" type="range" min="-100" max="100" step="1" value="0">
+        <div class="area-scale"><span>← 画面の左</span><span>画面の右 →</span></div>
+        <label class="area-check"><input id="area-lock" type="checkbox" checked>
+          <span>プレイヤーを1人に固定する<small>はじめに映った人（中央に近く大きく映る人）を追いかけ、後ろを通る人に判定が移らないようにします。</small></span></label>
+        <div class="area-actions">
+          <button id="area-reset" class="sound-toggle" type="button">元に戻す</button>
+          <button id="area-close" class="sound-toggle" type="button">閉じる</button>
+        </div>
+        <div id="area-status" class="area-status" aria-live="polite">設定はこのPCに保存されます</div>
+      </section>
       <header class="topbar">
         <div class="brand">
           <div class="brand-mark" aria-hidden="true">RH</div>
@@ -1387,6 +1422,7 @@
           </div>
         </div>
         <div class="top-actions">
+          <button id="area-button" class="sound-toggle" type="button" aria-expanded="false" aria-controls="area-panel">判定エリア</button>
           <button id="fullscreen-button" class="sound-toggle" type="button">全画面表示</button>
           <button id="sound-toggle" class="sound-toggle" type="button" aria-pressed="true">効果音 ON</button>
           <button id="voice-toggle" class="sound-toggle" type="button" aria-pressed="true" aria-label="音声案内 ON">音声案内 ON</button>
@@ -3311,6 +3347,7 @@
         trainingPreviewCtx.translate(width, 0);
         trainingPreviewCtx.scale(-1, 1);
         trainingPreviewCtx.drawImage(video, 0, 0, width, height);
+        drawAreaMask(trainingPreviewCtx, width, height);
 
         if (lm && trainingDrawingUtils) {
           drawReferenceGhost(trainingDrawingUtils, lm);
@@ -3329,6 +3366,7 @@
       }
 
       function resetCalibration() {
+        resetPlayerLock();
         playVoice(["raji-intro", "stand"]);
         resetStableJump();
         resetTwistMotion();
@@ -4273,6 +4311,7 @@
       }
 
       function returnToTop() {
+        resetPlayerLock();
         stopVoice();
         window.clearTimeout(returnTopTimer);
         returnTopTimer = null;
@@ -4766,7 +4805,8 @@
         const createLandmarker = (delegate) => PoseLandmarker.createFromOptions(vision, {
           baseOptions: { modelAssetPath, delegate },
           runningMode: "VIDEO",
-          numPoses: 1,
+          // 2人まで検出し、固定したプレイヤーを選ぶ（後ろを通る人に判定が移らないように）
+          numPoses: 2,
           minPoseDetectionConfidence: 0.5,
           minPosePresenceConfidence: 0.5,
           minTrackingConfidence: 0.5,
@@ -4860,6 +4900,122 @@
         ].join("\n");
       }
 
+      // ===== 判定エリア（横の範囲）とプレイヤー固定 =====
+      const AREA_STORAGE_KEY = "radioHeroes.detectArea.v1";
+      const detectArea = { width: 1, center: 0, lock: true };
+      try {
+        const saved = JSON.parse(localStorage.getItem(AREA_STORAGE_KEY) || "null");
+        if (saved && Number.isFinite(saved.width)) Object.assign(detectArea, {
+          width: Math.max(0.3, Math.min(1, saved.width)),
+          center: Math.max(-1, Math.min(1, Number(saved.center) || 0)),
+          lock: saved.lock !== false,
+        });
+      } catch (error) { /* 保存できない環境では既定値で動かす */ }
+      const areaCanvas = document.createElement("canvas");
+      const areaCtx = areaCanvas.getContext("2d");
+      // 映像は左右反転して表示しているため、「画面の右」は元画像では左側になる
+      function detectAreaRect() {
+        const W = video.videoWidth || 1280, H = video.videoHeight || 720;
+        const w = Math.round(W * detectArea.width);
+        const slack = W - w;
+        const x = Math.round(slack / 2 - detectArea.center * slack / 2);
+        return { x, y: 0, w, h: H, W, H, full: w >= W };
+      }
+      function detectionSource() {
+        const r = detectAreaRect();
+        if (r.full) return { source: video, rect: r };
+        if (areaCanvas.width !== r.w || areaCanvas.height !== r.h) { areaCanvas.width = r.w; areaCanvas.height = r.h; }
+        areaCtx.drawImage(video, r.x, 0, r.w, r.h, 0, 0, r.w, r.h);
+        return { source: areaCanvas, rect: r };
+      }
+      // 切り出した範囲の座標を、映像全体の座標に戻す（以降の判定・記録は従来どおり全体基準）
+      function mapToFullFrame(lm, r) {
+        if (r.full) return lm;
+        return lm.map((p) => ({ ...p, x: (r.x + p.x * r.w) / r.W }));
+      }
+      function drawAreaMask(context, width, height) {
+        const r = detectAreaRect();
+        if (r.full) return;
+        const x = r.x / r.W * width, w = r.w / r.W * width;
+        context.save();
+        context.fillStyle = "rgba(2, 6, 14, 0.62)";
+        context.fillRect(0, 0, x, height);
+        context.fillRect(x + w, 0, width - x - w, height);
+        context.strokeStyle = "rgba(83, 237, 255, 0.85)";
+        context.lineWidth = Math.max(2, width / 400);
+        context.setLineDash([12, 8]);
+        context.strokeRect(x, 1, w, height - 2);
+        context.restore();
+      }
+      // 複数人が映ったときは、固定したプレイヤーにいちばん近い人を選ぶ
+      let lockedPlayer = null;
+      function poseSummary(lm) {
+        const aspect = poseAspect();
+        const hipX = average(lm[23].x, lm[24].x), hipY = average(lm[23].y, lm[24].y);
+        const shoulderX = average(lm[11].x, lm[12].x), shoulderY = average(lm[11].y, lm[12].y);
+        const size = Math.max(Math.hypot((shoulderX - hipX) * aspect, shoulderY - hipY), 0.02);
+        const visible = [11, 12, 23, 24].reduce((sum, i) => sum + (lm[i].visibility ?? 0), 0) / 4;
+        return { lm, x: hipX, y: hipY, size, visible };
+      }
+      function pickPlayer(poses, now) {
+        if (!poses.length) return { player: null, others: [] };
+        const r = detectAreaRect();
+        const areaCenter = (r.x + r.w / 2) / r.W;
+        const aspect = poseAspect();
+        const items = poses.map(poseSummary).filter((item) => item.visible >= 0.2);
+        if (!items.length) return { player: null, others: [] };
+        let chosen = null;
+        if (detectArea.lock && lockedPlayer && now - lockedPlayer.at < 2500) {
+          const dist = (item) => Math.hypot((item.x - lockedPlayer.x) * aspect, item.y - lockedPlayer.y);
+          const nearest = items.reduce((a, b) => (dist(a) <= dist(b) ? a : b));
+          // 固定した人から大きく離れた位置の人には乗り換えない（胴の長さの1.2倍まで）
+          if (dist(nearest) <= Math.max(lockedPlayer.size * 1.2, 0.08)) chosen = nearest;
+          else return { player: null, others: items.map((i) => i.lm) };
+        }
+        if (!chosen) {
+          // 新しく固定する：大きく映り、判定エリアの中央に近い人
+          const score = (item) => item.size * 3 - Math.abs(item.x - areaCenter) * aspect * 0.8;
+          chosen = items.reduce((a, b) => (score(a) >= score(b) ? a : b));
+        }
+        lockedPlayer = { x: chosen.x, y: chosen.y, size: chosen.size, at: now };
+        return { player: chosen.lm, others: items.filter((i) => i !== chosen).map((i) => i.lm) };
+      }
+      function resetPlayerLock() { lockedPlayer = null; }
+
+      const areaPanel = document.querySelector("#area-panel");
+      const areaButton = document.querySelector("#area-button");
+      function syncAreaControls() {
+        document.querySelector("#area-width").value = String(Math.round(detectArea.width * 100));
+        document.querySelector("#area-center").value = String(Math.round(detectArea.center * 100));
+        document.querySelector("#area-lock").checked = detectArea.lock;
+        document.querySelector("#area-width-value").textContent = `${Math.round(detectArea.width * 100)}%`;
+        const c = Math.round(detectArea.center * 100);
+        document.querySelector("#area-center-value").textContent = detectArea.width >= 1 ? "（全体）" : c === 0 ? "中央" : c < 0 ? `左へ ${-c}` : `右へ ${c}`;
+        document.querySelector("#area-center").disabled = detectArea.width >= 1;
+        areaButton.classList.toggle("active", detectArea.width < 1);
+        areaButton.textContent = detectArea.width < 1 ? `判定エリア ${Math.round(detectArea.width * 100)}%` : "判定エリア";
+      }
+      function saveDetectArea() {
+        syncAreaControls();
+        resetPlayerLock();
+        try {
+          localStorage.setItem(AREA_STORAGE_KEY, JSON.stringify(detectArea));
+          document.querySelector("#area-status").textContent = "設定はこのPCに保存されました";
+        } catch (error) {
+          document.querySelector("#area-status").textContent = "この画面を閉じるまで有効です（保存できない設定のブラウザです）";
+        }
+      }
+      areaButton.addEventListener("click", () => {
+        areaPanel.hidden = !areaPanel.hidden;
+        areaButton.setAttribute("aria-expanded", String(!areaPanel.hidden));
+      });
+      document.querySelector("#area-close").addEventListener("click", () => { areaPanel.hidden = true; areaButton.setAttribute("aria-expanded", "false"); });
+      document.querySelector("#area-width").addEventListener("input", (event) => { detectArea.width = Number(event.target.value) / 100; saveDetectArea(); });
+      document.querySelector("#area-center").addEventListener("input", (event) => { detectArea.center = Number(event.target.value) / 100; saveDetectArea(); });
+      document.querySelector("#area-lock").addEventListener("change", (event) => { detectArea.lock = event.target.checked; saveDetectArea(); });
+      document.querySelector("#area-reset").addEventListener("click", () => { Object.assign(detectArea, { width: 1, center: 0, lock: true }); saveDetectArea(); });
+      syncAreaControls();
+
       function renderLoop() {
         if (!renderLoopActive) return;
         const now = performance.now();
@@ -4867,6 +5023,7 @@
         updateImuConnectionHealth(now);
         resizeCanvas();
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawAreaMask(ctx, canvas.width, canvas.height);
 
         const activeReferenceVideo = gameMode === "calibration" || gameMode === "training" ? referenceVideo : coachVideo;
         drawEnlargedReference(activeReferenceVideo);
@@ -4884,11 +5041,16 @@
         if (video.readyState >= 2 && video.currentTime !== lastVideoTime) {
           lastVideoTime = video.currentTime;
           const inferStart = performance.now();
-          const result = landmarker.detectForVideo(video, now);
-          updatePoseDebug(result.landmarks[0] || null, now, performance.now() - inferStart);
+          const { source, rect } = detectionSource();
+          const result = landmarker.detectForVideo(source, now);
+          const poses = result.landmarks.map((points) => mapToFullFrame(points, rect));
+          const { player, others } = pickPlayer(poses, now);
+          updatePoseDebug(player, now, performance.now() - inferStart);
+          // 判定に使わない人は灰色の細線で表示（「別の人が映っている」ことが分かるように）
+          others.forEach((points) => drawingUtils.drawConnectors(points, PoseLandmarker.POSE_CONNECTIONS, { color: "rgba(170, 180, 195, 0.45)", lineWidth: 2 }));
 
-          if (result.landmarks.length) {
-            const lm = result.landmarks[0];
+          if (player) {
+            const lm = player;
             recordResearchPose(lm, now);
             drawReferenceGhost(drawingUtils, lm);
             drawingUtils.drawConnectors(lm, PoseLandmarker.POSE_CONNECTIONS, {
