@@ -4293,7 +4293,7 @@
         playVoice([score >= 300 ? "hero-ending" : "adventure-ending", "finish"]);
         if (gameMode !== "battle") return;
         recordResearchEvent("battle_finish", { reason, score, rank: getScoreRank(score).rank, defeats, avoided, reflectedAttacks, variant: gameVariant,
-          ...(gameVariant === "kids" ? { punches: kids.punches, guards: kids.guards, misses: kids.misses, beams: kids.beams, beamsDodged: kids.dodged, maxCombo: kids.maxCombo } : {}) });
+          ...(gameVariant === "kids" ? { punches: kids.punches, guards: kids.guards, kicks: kids.kicks, misses: kids.misses, beams: kids.beams, beamsDodged: kids.dodged, maxCombo: kids.maxCombo } : {}) });
         gameMode = "result";
         updateTimeBar(0, false);
         hideFormCoach();
@@ -4334,14 +4334,14 @@
           ? `${entry.rank}：${entry.minScore.toLocaleString("ja-JP")}点〜`
           : `D：0〜${ranks[ranks.length - 2].minScore - 1}点`).join(" ／ ") + "（途中終了も同じ基準。ランクはゲーム内の活躍度で、体操の技能を認定するものではありません）";
         const kidsResult = gameVariant === "kids";
-        const labels = kidsResult ? ["パンチ", "ビームよけ", "最大コンボ"] : ["撃破", "回避", "反射"];
+        const labels = kidsResult ? ["パンチ・キック", "ビームよけ", "最大コンボ"] : ["撃破", "回避", "反射"];
         [resultDefeats, resultAvoids, resultReflects].forEach((el, i) => { el.previousElementSibling.textContent = labels[i]; });
         resultDefeats.textContent = String(defeats);
         resultAvoids.textContent = String(avoided);
         resultReflects.textContent = String(kidsResult ? kids.maxCombo : reflectedAttacks);
         if (kidsResult) {
           kids.balls = []; kids.beam = null; kidsBanner.hidden = true;
-          document.querySelector("#result-story").textContent = `📻 ラジ「ボールを${defeats}回はじいて、ビームを${avoided}回よけたね！ 街のみんなが元気になったよ！」`;
+          document.querySelector("#result-story").textContent = `📻 ラジ「ボールを${defeats}回はじいて${kids.kicks ? `（キック${kids.kicks}回）` : ""}、ビームを${avoided}回よけたね！ 街のみんなが元気になったよ！」`;
         }
         resultReturnAt = now + RESULT_DISPLAY_MS;
         returnCountdown.textContent = "10";
@@ -5064,21 +5064,30 @@
       // ===== こどもモード（ジャンプなし：ボールをパンチ・ビームをしゃがんでよける） =====
       let gameVariant = "standard";
       const KIDS_SCORE_RANKS = [
-        { rank: "S", minScore: 1800, title: "スーパーヒーロー！", color: "#ffe16b" },
-        { rank: "A", minScore: 1200, title: "パンチの達人！", color: "#c7ff4f" },
-        { rank: "B", minScore: 700, title: "たよれるヒーロー！", color: "#56e9ff" },
-        { rank: "C", minScore: 300, title: "がんばりヒーロー！", color: "#c4b5fd" },
+        { rank: "S", minScore: 900, title: "スーパーヒーロー！", color: "#ffe16b" },
+        { rank: "A", minScore: 650, title: "パンチの達人！", color: "#c7ff4f" },
+        { rank: "B", minScore: 400, title: "たよれるヒーロー！", color: "#56e9ff" },
+        { rank: "C", minScore: 150, title: "がんばりヒーロー！", color: "#c4b5fd" },
         { rank: "D", minScore: 0, title: "ヒーローの第一歩！", color: "#d5e1f0" },
       ];
       const KIDS_HAND_POINTS = [15, 16, 17, 18, 19, 20, 21, 22];
+      const KIDS_FOOT_POINTS = [27, 28, 29, 30, 31, 32]; // 足首・かかと・つま先（足でさわると「キック」）
       const KIDS_PUNCH_SPEED = 1.2;     // 手の速さ（胴の長さ／秒）。これ以上で当てると「パンチ」、遅いと「ガード」
       const KIDS_BEAM_WARN_MS = 3000;   // 「ビームが来るよ！」の予告（3・2・1）
       const KIDS_BEAM_FIRE_MS = 1100;   // ビームが出ている時間
       const KIDS_BEAM_GRACE_MS = 120;   // 出た直後の判定猶予
+      // 得点：ぜんぶ成功すると 25個×20点 ＋ 4回×150点 ＝ 1100点（毎回同じ出し方なので満点は一定）
+      const KIDS_POINTS = { punch: 20, kick: 20, guard: 10, beam: 150 };
+      const KIDS_BEAM_TIMES = [10000, 23000, 36000, 49000];           // ビーム予告の開始時刻（本番開始からの経過）
+      const KIDS_BALL_WINDOWS = [[1200, 10000, 6], [15000, 23000, 5], [28000, 36000, 5], [41000, 49000, 6], [54000, 57600, 3]];
+      const KIDS_BALL_TIMES = KIDS_BALL_WINDOWS.flatMap(([from, to, count]) =>
+        Array.from({ length: count }, (_, i) => Math.round(from + i * (to - from) / count)));   // 合計25個
+      const KIDS_MAX_SCORE = KIDS_BALL_TIMES.length * KIDS_POINTS.punch + KIDS_BEAM_TIMES.length * KIDS_POINTS.beam;
       const kids = {
         balls: [], beam: null, nextBallAt: Infinity, nextBeamAt: Infinity, combo: 0, maxCombo: 0,
-        punches: 0, guards: 0, misses: 0, dodged: 0, beams: 0, lm: null, lmAt: 0, prev: null, prevAt: 0,
+        punches: 0, guards: 0, kicks: 0, misses: 0, dodged: 0, beams: 0, lm: null, lmAt: 0, prev: null, prevAt: 0,
         handPeak: {}, standing: [], tutorialStage: 0, tutorialHits: 0, startedAt: 0, lastAt: 0, bannerUntil: 0,
+        ballIndex: 0, beamIndex: 0,
       };
       if (DEBUG_POSE) window.__radioKids = kids;
       const kidsBanner = document.querySelector("#kids-banner");
@@ -5088,7 +5097,7 @@
       }
       function kidsReset() {
         Object.assign(kids, { balls: [], beam: null, nextBallAt: Infinity, nextBeamAt: Infinity, combo: 0, maxCombo: 0,
-          punches: 0, guards: 0, misses: 0, dodged: 0, beams: 0, prev: null, handPeak: {}, bannerUntil: 0 });
+          punches: 0, guards: 0, kicks: 0, misses: 0, dodged: 0, beams: 0, prev: null, handPeak: {}, bannerUntil: 0, ballIndex: 0, beamIndex: 0 });
         kidsBanner.hidden = true;
       }
       function kidsScale(lm) {
@@ -5143,21 +5152,24 @@
         if (kind === "miss") { kids.combo = 0; kids.misses += 1; playSound("impactText", 0.32); recordResearchEvent("kids_ball", { result: "miss" }); return; }
         kids.combo += 1;
         kids.maxCombo = Math.max(kids.maxCombo, kids.combo);
-        const gained = kind === "punch" ? 50 + Math.min(kids.combo - 1, 5) * 10 : 20;
-        if (kind === "punch") kids.punches += 1; else kids.guards += 1;
+        // キックは速さに関係なくパンチと同じ点（小さい子は足元にボールが来やすいため）。コンボは表示のみ
+        const gained = KIDS_POINTS[kind];
+        if (kind === "punch") kids.punches += 1; else if (kind === "kick") kids.kicks += 1; else kids.guards += 1;
         if (gameMode === "battle") {
           score += gained;
           defeats += 1;
           scoreLabel.textContent = String(score).padStart(4, "0");
           defeatCountLabel.textContent = String(defeats);
-          missionText.textContent = kids.combo >= 2 ? `${kids.combo}コンボ！ ボールをはじけ！` : "ボールをパンチ！ ビームはしゃがんでよけよう";
+          missionText.textContent = kids.combo >= 2 ? `${kids.combo}コンボ！ ボールをはじけ！` : "ボールをパンチ・キック！ ビームはしゃがんでよけよう";
         } else {
           kids.tutorialHits += 1;
         }
-        impactText.textContent = kind === "punch" ? (kids.combo >= 3 ? `${kids.combo} COMBO!` : "PUNCH!") : "GUARD!";
+        impactText.textContent = kind === "guard" ? "GUARD!"
+          : kids.combo >= 3 ? `${kind === "kick" ? "KICK" : "PUNCH"} ×${kids.combo}`
+          : kind === "kick" ? "KICK!" : "PUNCH!";
         impactText.classList.add("dodge");
         impactText.classList.remove("show"); void impactText.offsetWidth; impactText.classList.add("show");
-        playSound(kind === "punch" ? "reflect" : "confirmSecondary", kind === "punch" ? 0.7 : 0.5);
+        playSound(kind === "punch" ? "reflect" : kind === "kick" ? "landing" : "confirmSecondary", kind === "guard" ? 0.5 : 0.7);
         recordResearchEvent("kids_ball", { result: kind, combo: kids.combo, points: gameMode === "battle" ? gained : 0 });
       }
       function kidsShowBanner(state, title, text = "", count = "", until = 0) {
@@ -5176,7 +5188,6 @@
         const top = Math.max(0, ref.noseY - 0.35 * t), bottom = ref.shoulderY + 0.10 * t;
         kids.beam = { phase: "warn", at: now, top, bottom, hit: false };
         kids.beams += 1;
-        kids.balls.forEach((ball) => { if (ball.state === "fly") { ball.state = "fade"; ball.at = now; } });
         setStatus("⚡ ビームが来るよ！", "光の帯が出たら、しゃがんでよけよう");
         playSound("bossWarning", 0.7);
         return true;
@@ -5193,14 +5204,14 @@
         if (dodged) {
           kids.dodged += 1;
           if (gameMode === "battle") {
-            const gained = 150;
+            const gained = KIDS_POINTS.beam;
             score += gained; avoided += 1;
             scoreLabel.textContent = String(score).padStart(4, "0");
             avoidCountLabel.textContent = String(avoided);
             showScorePopup("ビームよけ", gained);
           }
-          kidsShowBanner("dodged", "よけた！ すごい！", gameMode === "battle" ? "＋150点" : "", "", now + 1300);
-          if (gameMode === "battle") setStatus("ビームをよけた！", "またボールが飛んでくるよ。パンチではじこう！");
+          kidsShowBanner("dodged", "よけた！ すごい！", gameMode === "battle" ? `＋${KIDS_POINTS.beam}点` : "", "", now + 1300);
+          if (gameMode === "battle") setStatus("ビームをよけた！", "またボールが飛んでくるよ。パンチやキックではじこう！");
           playSound("dodgeWhoosh", 0.75);
         } else {
           kids.combo = 0;
@@ -5235,23 +5246,23 @@
               if (tutorial && kids.tutorialStage === 1) {
                 if (dodged) kidsTutorialComplete(now);
                 else kids.nextBeamAt = now + 2600; // 練習は成功するまでくり返す（自動では次へ進まない）
-              } else kids.nextBallAt = Math.max(kids.nextBallAt, now + 900);
+              }
             }
           } else if (now - beam.at > 1300) {
             kids.beam = null;
           }
-        } else if (now >= kids.nextBeamAt && kidsStartBeam(now)) {
-          kids.nextBeamAt = tutorial ? Infinity : now + 11500 + Math.random() * 2500;
+        } else if (tutorial ? now >= kids.nextBeamAt : kids.beamIndex < KIDS_BEAM_TIMES.length && now - kids.startedAt >= KIDS_BEAM_TIMES[kids.beamIndex]) {
+          if (kidsStartBeam(now)) { if (tutorial) kids.nextBeamAt = Infinity; else kids.beamIndex += 1; }
         }
         if (!kids.beam && kids.bannerUntil && now > kids.bannerUntil) { kidsBanner.hidden = true; kids.bannerUntil = 0; }
 
         // --- ボール ---
         const flying = kids.balls.filter((b) => b.state === "fly").length;
-        if (!kids.beam && now >= kids.nextBallAt && flying < (tutorial ? 1 : 3)) {
-          if (kidsSpawnBall(now, tutorial)) {
-            const elapsed = tutorial ? 0 : Math.min(1, (now - kids.startedAt) / BATTLE_DURATION_MS);
-            kids.nextBallAt = now + (tutorial ? 2200 : 1700 - 650 * elapsed + Math.random() * 300);
-          }
+        if (tutorial) {
+          if (!kids.beam && now >= kids.nextBallAt && flying < 1 && kidsSpawnBall(now, true)) kids.nextBallAt = now + 2200;
+        } else if (kids.ballIndex < KIDS_BALL_TIMES.length && now - kids.startedAt >= KIDS_BALL_TIMES[kids.ballIndex]) {
+          // 本番は毎回同じ時刻に25個（体が映っていないときは、映るまで少し待つ）
+          if (kidsSpawnBall(now, false) || now - kids.startedAt - KIDS_BALL_TIMES[kids.ballIndex] > 1500) kids.ballIndex += 1;
         }
         for (const ball of kids.balls) {
           ball.x += ball.vx * dt;
@@ -5266,9 +5277,17 @@
               if ((p.visibility ?? 1) < 0.3) continue;
               if (Math.hypot((p.x - ball.x) * W, (p.y - ball.y) * H) <= reach) { hitBy = i; break; }
             }
-            if (hitBy != null) {
+            let kickBy = null;
+            if (hitBy == null) {
+              for (const i of KIDS_FOOT_POINTS) {
+                const p = lm[i];
+                if ((p.visibility ?? 1) < 0.3) continue;
+                if (Math.hypot((p.x - ball.x) * W, (p.y - ball.y) * H) <= reach) { kickBy = i; break; }
+              }
+            }
+            if (hitBy != null || kickBy != null) {
               const speed = Math.max(...KIDS_HAND_POINTS.map((i) => (kids.handPeak[i] && now - kids.handPeak[i].at < 250 ? kids.handPeak[i].speed : 0)));
-              kidsHitBall(ball, speed >= KIDS_PUNCH_SPEED ? "punch" : "guard", now);
+              kidsHitBall(ball, kickBy != null ? "kick" : speed >= KIDS_PUNCH_SPEED ? "punch" : "guard", now);
               if (tutorial && kids.tutorialStage === 0) kidsTutorialProgress(now);
               continue;
             }
@@ -5367,7 +5386,7 @@
         if (stage === 0) {
           tutorialIcon.textContent = "🥊";
           tutorialTitle.textContent = "ボールをパンチではじこう！";
-          tutorialDescription.textContent = "左右からボールが飛んでくるよ。体をひねって、手でボールにタッチ！ すばやく当てるとパンチ、手を置いて受けるとガード。";
+          tutorialDescription.textContent = "左右からボールが飛んでくるよ。体をひねって、手でボールにタッチ！ すばやく当てるとパンチ、手を置いて受けるとガード。足でさわるとキック！";
           tutorialCue.textContent = "3回はじけたらOK（0/3）";
           missionText.textContent = "ボールをパンチ！";
           setStatus("やってみよう：パンチ", "飛んでくるボールに手を当ててはじこう");
@@ -5420,7 +5439,7 @@
         tutorialIcon.textContent = "🌟";
         tutorialTitle.textContent = "パンチとビームよけ、できたね！";
         tutorialDescription.textContent = "1分間、どんどん飛んでくるボールをパンチ！ ときどき来るビームはしゃがんでよけよう。";
-        tutorialCue.textContent = "ボール：パンチ50点〜（コンボでアップ）／ガード20点　ビーム：よけると150点";
+        tutorialCue.textContent = `ボール25個：パンチ・キック${KIDS_POINTS.punch}点／ガード${KIDS_POINTS.guard}点　ビーム4回：よけると${KIDS_POINTS.beam}点（ぜんぶできたら${KIDS_MAX_SCORE}点！）`;
         tutorialStartButton.hidden = false;
         missionText.textContent = "準備OK！";
         setStatus("準備OK！", "「本番スタート！」を押すと1分間のゲームが始まります");
@@ -5443,15 +5462,15 @@
         hideFormCoach();
         kidsReset();
         kids.startedAt = now;
-        kids.nextBallAt = now + 1200;
-        kids.nextBeamAt = now + 9000;
+        kids.ballIndex = 0;
+        kids.beamIndex = 0;
         battleEndsAt = now + BATTLE_DURATION_MS;
         battleTimer.textContent = "01:00";
         timerCard.classList.remove("warning");
         finishBattleButton.hidden = false;
         nextObstacleAt = nextBossAttackAt = Infinity;
-        missionText.textContent = "ボールをパンチ！ ビームはしゃがんでよけよう";
-        setStatus("スタート！", "飛んでくるボールをパンチ！ ビームの予告が出たらしゃがんでよけよう");
+        missionText.textContent = "ボールをパンチ・キック！ ビームはしゃがんでよけよう";
+        setStatus("スタート！", "飛んでくるボールを手でパンチ、足でキック！ ビームの予告が出たらしゃがんでよけよう");
         playSound("swordDraw", 0.68);
       }
 
