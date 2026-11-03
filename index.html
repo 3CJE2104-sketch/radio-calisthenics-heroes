@@ -1392,6 +1392,30 @@
       .area-panel .area-actions button { flex:1; min-width:0; }
       .area-panel .area-status { margin-top:10px; padding:7px 10px; border-radius:10px; background:rgba(83,237,255,.08); color:#cfe9ff; font-size:12px; }
       .sound-toggle.active { background:rgba(83,237,255,.16); border-color:rgba(83,237,255,.7); color:#fff; }
+      /* こどもモード */
+      .variant-picker { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:14px 0 6px; }
+      .variant-option { cursor:pointer; text-align:left; padding:12px 14px; border:2px solid rgba(135,185,255,.24); border-radius:16px;
+        background:rgba(8,20,38,.78); color:var(--ink); font:inherit; }
+      .variant-option strong { display:block; font-size:16px; }
+      .variant-option small { display:block; margin-top:4px; color:var(--muted); font-size:12px; line-height:1.5; }
+      .variant-option.selected { border-color:var(--lime); background:rgba(199,255,79,.10); box-shadow:0 0 0 3px rgba(199,255,79,.12); }
+      body[data-variant="kids"] .mode-picker, body[data-variant="kids"] #mode-help { display:none; }
+      .game-shell[data-variant="kids"] .enemy-zone, .game-shell[data-variant="kids"] .obstacle-zone,
+      .game-shell[data-variant="kids"] .reflect-zone { display:none; }
+      /* ビームは頭〜肩の高さを通るので、予告は画面の下側に出して光の帯を隠さない */
+      .kids-banner { position:absolute; left:50%; bottom:24%; z-index:15; transform:translateX(-50%); pointer-events:none;
+        width:min(560px, 80%); padding:12px 18px; border-radius:20px; text-align:center; background:rgba(5,14,27,.9);
+        border:3px solid #ff5d7a; box-shadow:0 0 30px rgba(255,93,122,.45); color:#fff; }
+      .kids-banner[hidden] { display:none; }
+      .kids-banner strong { display:block; font-size:clamp(20px,2.6vw,38px); font-weight:1000; line-height:1.2; }
+      .kids-banner span { display:block; margin-top:4px; font-size:clamp(13px,1.3vw,20px); font-weight:800; color:#ffe0e6; }
+      .kids-banner b { display:block; margin-top:4px; font-size:clamp(34px,4.6vw,68px); font-style:italic; color:#ffd84d; line-height:1; }
+      .kids-banner[data-state="fire"] { border-color:#ffd84d; box-shadow:0 0 36px rgba(255,216,77,.6); }
+      .kids-banner[data-state="dodged"] { border-color:var(--lime); box-shadow:0 0 30px rgba(199,255,79,.5); }
+      .kids-banner[data-state="hit"] { border-color:#c4b5fd; box-shadow:none; }
+      .kids-banner[data-state="warn"] b { animation:kids-count .5s ease-in-out infinite alternate; }
+      @keyframes kids-count { to { transform:scale(1.12); } }
+      @media (prefers-reduced-motion: reduce) { .kids-banner[data-state="warn"] b { animation:none; } }
     </style>
   </head>
   <body>
@@ -1498,6 +1522,12 @@
             <div id="mc-next" class="mc-next"></div>
           </div>
 
+          <div id="kids-banner" class="kids-banner" role="status" aria-live="assertive" hidden>
+            <strong id="kids-banner-title"></strong>
+            <span id="kids-banner-text"></span>
+            <b id="kids-banner-count"></b>
+          </div>
+
           <div id="jump-charge" class="jump-charge" role="status" aria-live="polite" hidden>
             <strong id="jc-title" class="jc-title">STOP!!</strong>
             <span id="jc-hint" class="jc-hint">ピタッと止まって、力をためよう</span>
@@ -1528,6 +1558,16 @@
               <h2>体操で、街に<br><em>朝を取り戻そう！</em></h2>
               <p>カチコチ魔王が、街の元気を奪ってしまった！ 案内役のラジオ「ラジ」と3つの技を覚えて、街を明るくしよう。</p>
               <p class="story-note">📻 ラジ「大きな力はいらないよ。お手本を見て、無理なく、ていねいに動こう！」</p>
+              <div class="variant-picker" role="radiogroup" aria-label="あそぶモードを選択">
+                <button type="button" class="variant-option selected" data-variant="standard" role="radio" aria-checked="true">
+                  <strong>ラジオ体操モード</strong>
+                  <small>ねじる・ジャンプ・斜め下に曲げる（小学校高学年〜大人）</small>
+                </button>
+                <button type="button" class="variant-option" data-variant="kids" role="radio" aria-checked="false">
+                  <strong>こどもモード</strong>
+                  <small>ボールをパンチ・ビームをしゃがんでよける（ジャンプなし）</small>
+                </button>
+              </div>
               <div class="mode-picker" role="radiogroup" aria-label="プレイモードを選択">
                 <button type="button" class="mode-option selected" data-input-mode="mediapipe" role="radio" aria-checked="true">
                   <strong>MediaPipeのみ</strong>
@@ -2073,8 +2113,10 @@
         { rank: "C", minScore: 250, title: "かけだしヒーロー！", color: "#c4b5fd" },
         { rank: "D", minScore: 0, title: "ヒーローの第一歩！", color: "#d5e1f0" },
       ];
+      function activeScoreRanks() { return gameVariant === "kids" ? KIDS_SCORE_RANKS : SCORE_RANKS; }
       function getScoreRank(totalScore) {
-        return SCORE_RANKS.find(entry => totalScore >= entry.minScore) || SCORE_RANKS[SCORE_RANKS.length - 1];
+        const ranks = activeScoreRanks();
+        return ranks.find(entry => totalScore >= entry.minScore) || ranks[ranks.length - 1];
       }
       let twistNeutralSince = null;
       let twistNeutralCompression = null;
@@ -3366,6 +3408,9 @@
 
       function resetCalibration() {
         resetPlayerLock();
+        kidsReset();
+        tutorialDots.forEach((dot) => { dot.hidden = false; });
+        if (gameVariant === "kids") shell.dataset.variant = "kids"; else delete shell.dataset.variant;
         playVoice(["raji-intro", "stand"]);
         resetStableJump();
         resetTwistMotion();
@@ -3614,7 +3659,7 @@
           recalibrateButton.disabled = false;
           recordResearchEvent("calibration_skipped", { collectedFrames: calibrationSamples.length });
           playSound("confirmSecondary", 0.52);
-          startTraining();
+          if (gameVariant === "kids") beginKidsTutorial(); else startTraining();
           return;
         }
         if (gameMode !== "training" || trainingLocked) return;
@@ -4192,6 +4237,7 @@
           jump:"元気スタンプ ／ 両脚で跳ぶ運動",
           diagonal:"のびのびバリア ／ 体を斜め下に曲げ胸を反らす運動",
           twist:"くるっとリフレクト ／ 体をねじる運動",
+          kids:"こどもモード ／ ボールをパンチ・ビームをよける",
         };
         const phases = {
           top:"📻 ラジ「一緒に街の元気を取り戻そう！」",
@@ -4229,7 +4275,7 @@
           lastBattleClockAt=now;
           const remaining = battleEndsAt - now;
           updateTimeBar(remaining, battleMission?.phase==="preparing");
-          if(remaining>0)updateBattleMission(now);
+          if(remaining>0 && gameVariant!=="kids")updateBattleMission(now);
           updateMissionCard(now);
           battleTimer.textContent = formatTime(remaining);
           timerCard.classList.toggle("warning", remaining <= 30000);
@@ -4246,7 +4292,8 @@
         clearScorePopup();
         playVoice([score >= 300 ? "hero-ending" : "adventure-ending", "finish"]);
         if (gameMode !== "battle") return;
-        recordResearchEvent("battle_finish", { reason, score, rank: getScoreRank(score).rank, defeats, avoided, reflectedAttacks });
+        recordResearchEvent("battle_finish", { reason, score, rank: getScoreRank(score).rank, defeats, avoided, reflectedAttacks, variant: gameVariant,
+          ...(gameVariant === "kids" ? { punches: kids.punches, guards: kids.guards, misses: kids.misses, beams: kids.beams, beamsDodged: kids.dodged, maxCombo: kids.maxCombo } : {}) });
         gameMode = "result";
         updateTimeBar(0, false);
         hideFormCoach();
@@ -4278,16 +4325,24 @@
         resultRank.textContent = rankEntry.rank;
         resultRank.style.color = rankEntry.color;
         resultRankTitle.textContent = rankEntry.title;
-        const nextRank = SCORE_RANKS[SCORE_RANKS.indexOf(rankEntry) - 1];
+        const ranks = activeScoreRanks();
+        const nextRank = ranks[ranks.indexOf(rankEntry) - 1];
         resultRankNext.textContent = nextRank
           ? `次の${nextRank.rank}ランクまで、あと${(nextRank.minScore - score).toLocaleString("ja-JP")}点！`
           : "最高ランク達成！";
-        resultRankGuide.textContent = SCORE_RANKS.map(entry => entry.minScore
+        resultRankGuide.textContent = ranks.map(entry => entry.minScore
           ? `${entry.rank}：${entry.minScore.toLocaleString("ja-JP")}点〜`
-          : `D：0〜${SCORE_RANKS[SCORE_RANKS.length - 2].minScore - 1}点`).join(" ／ ") + "（途中終了も同じ基準。ランクはゲーム内の活躍度で、体操の技能を認定するものではありません）";
+          : `D：0〜${ranks[ranks.length - 2].minScore - 1}点`).join(" ／ ") + "（途中終了も同じ基準。ランクはゲーム内の活躍度で、体操の技能を認定するものではありません）";
+        const kidsResult = gameVariant === "kids";
+        const labels = kidsResult ? ["パンチ", "ビームよけ", "最大コンボ"] : ["撃破", "回避", "反射"];
+        [resultDefeats, resultAvoids, resultReflects].forEach((el, i) => { el.previousElementSibling.textContent = labels[i]; });
         resultDefeats.textContent = String(defeats);
         resultAvoids.textContent = String(avoided);
-        resultReflects.textContent = String(reflectedAttacks);
+        resultReflects.textContent = String(kidsResult ? kids.maxCombo : reflectedAttacks);
+        if (kidsResult) {
+          kids.balls = []; kids.beam = null; kidsBanner.hidden = true;
+          document.querySelector("#result-story").textContent = `📻 ラジ「ボールを${defeats}回はじいて、ビームを${avoided}回よけたね！ 街のみんなが元気になったよ！」`;
+        }
         resultReturnAt = now + RESULT_DISPLAY_MS;
         returnCountdown.textContent = "10";
         resultOverlay.classList.remove("hidden");
@@ -4301,6 +4356,7 @@
 
       function returnToTop() {
         resetPlayerLock();
+        kidsReset();
         stopVoice();
         window.clearTimeout(returnTopTimer);
         returnTopTimer = null;
@@ -4422,7 +4478,7 @@
             applyCalibrationBaseline();
             calibrationState.textContent = "動作確認中";
             recalibrateButton.disabled = false;
-            startTraining();
+            if (gameVariant === "kids") beginKidsTutorial(); else startTraining();
           }
           return;
         }
@@ -5005,6 +5061,400 @@
       document.querySelector("#area-reset").addEventListener("click", () => { Object.assign(detectArea, { width: 1, center: 0, lock: true }); saveDetectArea(); });
       syncAreaControls();
 
+      // ===== こどもモード（ジャンプなし：ボールをパンチ・ビームをしゃがんでよける） =====
+      let gameVariant = "standard";
+      const KIDS_SCORE_RANKS = [
+        { rank: "S", minScore: 1800, title: "スーパーヒーロー！", color: "#ffe16b" },
+        { rank: "A", minScore: 1200, title: "パンチの達人！", color: "#c7ff4f" },
+        { rank: "B", minScore: 700, title: "たよれるヒーロー！", color: "#56e9ff" },
+        { rank: "C", minScore: 300, title: "がんばりヒーロー！", color: "#c4b5fd" },
+        { rank: "D", minScore: 0, title: "ヒーローの第一歩！", color: "#d5e1f0" },
+      ];
+      const KIDS_HAND_POINTS = [15, 16, 17, 18, 19, 20, 21, 22];
+      const KIDS_PUNCH_SPEED = 1.2;     // 手の速さ（胴の長さ／秒）。これ以上で当てると「パンチ」、遅いと「ガード」
+      const KIDS_BEAM_WARN_MS = 3000;   // 「ビームが来るよ！」の予告（3・2・1）
+      const KIDS_BEAM_FIRE_MS = 1100;   // ビームが出ている時間
+      const KIDS_BEAM_GRACE_MS = 120;   // 出た直後の判定猶予
+      const kids = {
+        balls: [], beam: null, nextBallAt: Infinity, nextBeamAt: Infinity, combo: 0, maxCombo: 0,
+        punches: 0, guards: 0, misses: 0, dodged: 0, beams: 0, lm: null, lmAt: 0, prev: null, prevAt: 0,
+        handPeak: {}, standing: [], tutorialStage: 0, tutorialHits: 0, startedAt: 0, lastAt: 0, bannerUntil: 0,
+      };
+      if (DEBUG_POSE) window.__radioKids = kids;
+      const kidsBanner = document.querySelector("#kids-banner");
+
+      function kidsActive() {
+        return gameVariant === "kids" && (gameMode === "kids-tutorial" || (gameMode === "battle" && !battleMission));
+      }
+      function kidsReset() {
+        Object.assign(kids, { balls: [], beam: null, nextBallAt: Infinity, nextBeamAt: Infinity, combo: 0, maxCombo: 0,
+          punches: 0, guards: 0, misses: 0, dodged: 0, beams: 0, prev: null, handPeak: {}, bannerUntil: 0 });
+        kidsBanner.hidden = true;
+      }
+      function kidsScale(lm) {
+        const shoulderY = average(lm[11].y, lm[12].y), hipY = average(lm[23].y, lm[24].y);
+        return Math.max(hipY - shoulderY, 0.05);
+      }
+      // 毎フレームの骨格を受け取る（判定は kidsTick でまとめて行う）
+      function kidsOnPose(lm, now) {
+        if (gameVariant !== "kids") return;
+        if (!lm) { kids.lm = null; return; }
+        const W = video.videoWidth || 1280, H = video.videoHeight || 720;
+        const t = kidsScale(lm);
+        if (kids.prev && now - kids.prevAt > 0 && now - kids.prevAt < 250) {
+          const dt = (now - kids.prevAt) / 1000;
+          KIDS_HAND_POINTS.forEach((i) => {
+            const a = kids.prev[i], b = lm[i];
+            const speed = Math.hypot((b.x - a.x) * W, (b.y - a.y) * H) / (t * H) / dt;
+            const peak = kids.handPeak[i];
+            if (!peak || speed >= peak.speed || now - peak.at > 220) kids.handPeak[i] = { speed, at: now };
+          });
+        }
+        kids.prev = lm; kids.prevAt = now; kids.lm = lm; kids.lmAt = now;
+        // ビームの高さを決めるため、直近5秒で一番背が高かった姿勢を覚えておく
+        const noseY = lm[0].y, shoulderY = average(lm[11].y, lm[12].y), hipY = average(lm[23].y, lm[24].y);
+        if ((lm[0].visibility ?? 1) >= 0.3) kids.standing.push({ now, noseY, shoulderY, hipY });
+        while (kids.standing.length && now - kids.standing[0].now > 5000) kids.standing.shift();
+      }
+      function kidsStandingRef() {
+        if (!kids.standing.length) return null;
+        return kids.standing.reduce((a, b) => (b.noseY < a.noseY ? b : a));
+      }
+      function kidsSpawnBall(now, slow = false) {
+        const lm = kids.lm;
+        if (!lm) return false;
+        const r = detectAreaRect();
+        const t = kidsScale(lm);
+        const hipX = average(lm[23].x, lm[24].x);
+        const shoulderY = average(lm[11].y, lm[12].y), hipY = average(lm[23].y, lm[24].y);
+        const fromLeft = Math.random() < 0.5;
+        const left = r.x / r.W + 0.03, right = (r.x + r.w) / r.W - 0.03;
+        const x = fromLeft ? left : right;
+        const y = shoulderY - 0.1 * t + Math.random() * (average(shoulderY, hipY) - shoulderY + 0.1 * t);
+        const elapsed = gameMode === "battle" ? Math.min(1, (now - kids.startedAt) / BATTLE_DURATION_MS) : 0;
+        const duration = slow ? 3400 : 2600 - 700 * elapsed;
+        kids.balls.push({ x, y, vx: (hipX - x) / duration, vy: 0, r: 0.3 * t, state: "fly", at: now, hue: Math.floor(Math.random() * 360) });
+        playSound("obstacleWarning", 0.25);
+        return true;
+      }
+      function kidsHitBall(ball, kind, now) {
+        ball.state = kind; ball.at = now;
+        ball.vx = -ball.vx * 2.4; ball.vy = -0.0009;
+        if (kind === "miss") { kids.combo = 0; kids.misses += 1; playSound("impactText", 0.32); recordResearchEvent("kids_ball", { result: "miss" }); return; }
+        kids.combo += 1;
+        kids.maxCombo = Math.max(kids.maxCombo, kids.combo);
+        const gained = kind === "punch" ? 50 + Math.min(kids.combo - 1, 5) * 10 : 20;
+        if (kind === "punch") kids.punches += 1; else kids.guards += 1;
+        if (gameMode === "battle") {
+          score += gained;
+          defeats += 1;
+          scoreLabel.textContent = String(score).padStart(4, "0");
+          defeatCountLabel.textContent = String(defeats);
+          missionText.textContent = kids.combo >= 2 ? `${kids.combo}コンボ！ ボールをはじけ！` : "ボールをパンチ！ ビームはしゃがんでよけよう";
+        } else {
+          kids.tutorialHits += 1;
+        }
+        impactText.textContent = kind === "punch" ? (kids.combo >= 3 ? `${kids.combo} COMBO!` : "PUNCH!") : "GUARD!";
+        impactText.classList.add("dodge");
+        impactText.classList.remove("show"); void impactText.offsetWidth; impactText.classList.add("show");
+        playSound(kind === "punch" ? "reflect" : "confirmSecondary", kind === "punch" ? 0.7 : 0.5);
+        recordResearchEvent("kids_ball", { result: kind, combo: kids.combo, points: gameMode === "battle" ? gained : 0 });
+      }
+      function kidsShowBanner(state, title, text = "", count = "", until = 0) {
+        kidsBanner.hidden = false;
+        kidsBanner.dataset.state = state;
+        document.querySelector("#kids-banner-title").textContent = title;
+        document.querySelector("#kids-banner-text").textContent = text;
+        document.querySelector("#kids-banner-count").textContent = count;
+        kids.bannerUntil = until;
+      }
+      function kidsStartBeam(now) {
+        const ref = kidsStandingRef();
+        if (!ref) return false;
+        const t = Math.max(ref.hipY - ref.shoulderY, 0.05);
+        // 立ったときの「頭のてっぺん〜肩の少し下」を通るビーム。しゃがむ・かがむ等で、体のどの点も帯に入らなければ成功
+        const top = Math.max(0, ref.noseY - 0.35 * t), bottom = ref.shoulderY + 0.10 * t;
+        kids.beam = { phase: "warn", at: now, top, bottom, hit: false };
+        kids.beams += 1;
+        kids.balls.forEach((ball) => { if (ball.state === "fly") { ball.state = "fade"; ball.at = now; } });
+        setStatus("⚡ ビームが来るよ！", "光の帯が出たら、しゃがんでよけよう");
+        playSound("bossWarning", 0.7);
+        return true;
+      }
+      function kidsBeamOverlaps(lm, beam) {
+        if (!lm) return false; // 見失ったフレームは重なりなしとして扱う（しゃがんで外れた場合など）
+        return lm.some((p, i) => i <= 32 && (p.visibility ?? 1) >= 0.35 && p.y >= beam.top && p.y <= beam.bottom);
+      }
+      function kidsResolveBeam(now) {
+        const beam = kids.beam;
+        beam.phase = "done"; beam.at = now;
+        const dodged = !beam.hit;
+        recordResearchEvent("kids_beam", { dodged });
+        if (dodged) {
+          kids.dodged += 1;
+          if (gameMode === "battle") {
+            const gained = 150;
+            score += gained; avoided += 1;
+            scoreLabel.textContent = String(score).padStart(4, "0");
+            avoidCountLabel.textContent = String(avoided);
+            showScorePopup("ビームよけ", gained);
+          }
+          kidsShowBanner("dodged", "よけた！ すごい！", gameMode === "battle" ? "＋150点" : "", "", now + 1300);
+          if (gameMode === "battle") setStatus("ビームをよけた！", "またボールが飛んでくるよ。パンチではじこう！");
+          playSound("dodgeWhoosh", 0.75);
+        } else {
+          kids.combo = 0;
+          kidsShowBanner("hit", "ビリビリッ！ おしい！", "頭も手も、光の下までさげよう", "", now + 1500);
+          if (gameMode === "battle") setStatus("おしい！", "次のビームは、頭も手も光の下までさげよう");
+          playSound("impactText", 0.5);
+        }
+        return dodged;
+      }
+
+      // 毎フレームの進行（ボールの移動・当たり判定・ビーム）
+      function kidsTick(now) {
+        if (!kidsActive()) { kids.lastAt = now; return; }
+        const dt = Math.min(now - (kids.lastAt || now), 100);
+        kids.lastAt = now;
+        const lm = now - kids.lmAt < 400 ? kids.lm : null;
+        const W = video.videoWidth || 1280, H = video.videoHeight || 720;
+        const tutorial = gameMode === "kids-tutorial";
+
+        // --- ビーム ---
+        const beam = kids.beam;
+        if (beam) {
+          if (beam.phase === "warn") {
+            const left = KIDS_BEAM_WARN_MS - (now - beam.at);
+            kidsShowBanner("warn", "⚡ ビームが来るよ！", "しゃがんで、光の帯に体が入らないようにしよう", String(Math.max(1, Math.ceil(left / 1000))));
+            if (left <= 0) { beam.phase = "fire"; beam.at = now; playSound("impactText", 0.6); }
+          } else if (beam.phase === "fire") {
+            kidsShowBanner("fire", "いまだ！ しゃがんで！", "光に当たらないように");
+            if (now - beam.at >= KIDS_BEAM_GRACE_MS && kidsBeamOverlaps(lm, beam)) beam.hit = true;
+            if (now - beam.at >= KIDS_BEAM_FIRE_MS) {
+              const dodged = kidsResolveBeam(now);
+              if (tutorial && kids.tutorialStage === 1) {
+                if (dodged) kidsTutorialComplete(now);
+                else kids.nextBeamAt = now + 2600; // 練習は成功するまでくり返す（自動では次へ進まない）
+              } else kids.nextBallAt = Math.max(kids.nextBallAt, now + 900);
+            }
+          } else if (now - beam.at > 1300) {
+            kids.beam = null;
+          }
+        } else if (now >= kids.nextBeamAt && kidsStartBeam(now)) {
+          kids.nextBeamAt = tutorial ? Infinity : now + 11500 + Math.random() * 2500;
+        }
+        if (!kids.beam && kids.bannerUntil && now > kids.bannerUntil) { kidsBanner.hidden = true; kids.bannerUntil = 0; }
+
+        // --- ボール ---
+        const flying = kids.balls.filter((b) => b.state === "fly").length;
+        if (!kids.beam && now >= kids.nextBallAt && flying < (tutorial ? 1 : 3)) {
+          if (kidsSpawnBall(now, tutorial)) {
+            const elapsed = tutorial ? 0 : Math.min(1, (now - kids.startedAt) / BATTLE_DURATION_MS);
+            kids.nextBallAt = now + (tutorial ? 2200 : 1700 - 650 * elapsed + Math.random() * 300);
+          }
+        }
+        for (const ball of kids.balls) {
+          ball.x += ball.vx * dt;
+          ball.y += ball.vy * dt;
+          if (ball.state !== "fly") continue;
+          if (lm) {
+            const t = kidsScale(lm);
+            const reach = ball.r * H + 0.12 * t * H;
+            let hitBy = null;
+            for (const i of KIDS_HAND_POINTS) {
+              const p = lm[i];
+              if ((p.visibility ?? 1) < 0.3) continue;
+              if (Math.hypot((p.x - ball.x) * W, (p.y - ball.y) * H) <= reach) { hitBy = i; break; }
+            }
+            if (hitBy != null) {
+              const speed = Math.max(...KIDS_HAND_POINTS.map((i) => (kids.handPeak[i] && now - kids.handPeak[i].at < 250 ? kids.handPeak[i].speed : 0)));
+              kidsHitBall(ball, speed >= KIDS_PUNCH_SPEED ? "punch" : "guard", now);
+              if (tutorial && kids.tutorialStage === 0) kidsTutorialProgress(now);
+              continue;
+            }
+            const hipX = average(lm[23].x, lm[24].x);
+            if (Math.abs(ball.x - hipX) * W <= 0.22 * t * H) { kidsHitBall(ball, "miss", now); continue; }
+          } else if ((ball.vx > 0 && ball.x > 0.62) || (ball.vx < 0 && ball.x < 0.38)) {
+            kidsHitBall(ball, "miss", now);
+          }
+        }
+        kids.balls = kids.balls.filter((b) => (b.state === "fly" ? b.x > -0.1 && b.x < 1.1 : now - b.at < 650));
+      }
+
+      // カメラ用キャンバス（映像と同じく左右反転して表示される）にボールとビームを描く
+      function kidsDraw(context, now) {
+        if (!kidsActive()) return;
+        const W = canvas.width, H = canvas.height;
+        const beam = kids.beam;
+        if (beam && beam.phase !== "done") {
+          const y = beam.top * H, h = (beam.bottom - beam.top) * H;
+          context.save();
+          if (beam.phase === "warn") {
+            const blink = Math.floor(now / 250) % 2 === 0;
+            context.fillStyle = blink ? "rgba(255, 70, 100, 0.22)" : "rgba(255, 70, 100, 0.10)";
+            context.fillRect(0, y, W, h);
+            context.setLineDash([18, 12]);
+            context.lineWidth = Math.max(3, H / 180);
+            context.strokeStyle = "rgba(255, 110, 140, 0.95)";
+            context.strokeRect(-4, y, W + 8, h);
+          } else {
+            const g = context.createLinearGradient(0, y, 0, y + h);
+            g.addColorStop(0, "rgba(255, 230, 90, 0.25)");
+            g.addColorStop(0.5, "rgba(255, 255, 230, 0.95)");
+            g.addColorStop(1, "rgba(255, 230, 90, 0.25)");
+            context.shadowColor = "rgba(255, 220, 80, 0.9)";
+            context.shadowBlur = H / 25;
+            context.fillStyle = g;
+            context.fillRect(0, y, W, h);
+            if (beam.hit) { context.fillStyle = "rgba(255, 60, 90, 0.25)"; context.fillRect(0, y, W, h); }
+          }
+          context.restore();
+        }
+        for (const ball of kids.balls) {
+          const x = ball.x * W, y = ball.y * H, r = ball.r * H;
+          context.save();
+          if (ball.state === "fly") {
+            const g = context.createRadialGradient(x - r * 0.35, y - r * 0.35, r * 0.1, x, y, r);
+            g.addColorStop(0, "#fff7d6");
+            g.addColorStop(0.35, `hsl(${ball.hue}, 95%, 62%)`);
+            g.addColorStop(1, `hsl(${ball.hue}, 90%, 38%)`);
+            context.fillStyle = g;
+            context.shadowColor = `hsla(${ball.hue}, 95%, 60%, 0.8)`;
+            context.shadowBlur = r * 0.6;
+            context.beginPath(); context.arc(x, y, r, 0, Math.PI * 2); context.fill();
+          } else {
+            const k = Math.min(1, (now - ball.at) / 600);
+            context.globalAlpha = 1 - k;
+            context.strokeStyle = ball.state === "miss" ? "rgba(196, 181, 253, 0.9)" : ball.state === "fade" ? "rgba(255,255,255,.5)" : "#c7ff4f";
+            context.lineWidth = Math.max(3, r * 0.18);
+            context.beginPath(); context.arc(x, y, r * (1 + k * 1.2), 0, Math.PI * 2); context.stroke();
+            if (ball.state === "punch" || ball.state === "guard") {
+              context.fillStyle = `hsl(${ball.hue}, 95%, 62%)`;
+              context.beginPath(); context.arc(x, y, r * (1 - k * 0.6), 0, Math.PI * 2); context.fill();
+            }
+          }
+          context.restore();
+        }
+      }
+
+      // ---- 練習（成功するまで自動では進まない。スキップボタンで次へ） ----
+      function beginKidsTutorial() {
+        gameMode = "kids-tutorial";
+        shell.dataset.variant = "kids";
+        shell.dataset.action = "kids";
+        kidsReset();
+        recordResearchEvent("tutorial_start", { variant: "kids" });
+        trainingOverlay.classList.add("hidden");
+        hideFormCoach();
+        tutorialPanel.hidden = false;
+        tutorialStartButton.hidden = true;
+        finishBattleButton.hidden = true;
+        tutorialSkippedCount = 0;
+        tutorialDots.forEach((dot, i) => { dot.hidden = i > 1; });
+        kidsShowTutorialStage(0);
+      }
+      function kidsShowTutorialStage(stage) {
+        const now = performance.now();
+        kids.tutorialStage = stage;
+        kids.tutorialHits = 0;
+        kids.balls = []; kids.beam = null; kidsBanner.hidden = true;
+        tutorialLocked = false;
+        tutorialNextButton.hidden = false;
+        tutorialNextButton.disabled = false;
+        tutorialNextButton.textContent = stage === 0 ? "次へ（できなくても進める）" : "練習を終える（できなくても進める）";
+        tutorialBadge.textContent = `こどもモード あそびかた ${stage + 1}/2`;
+        tutorialDots.forEach((dot, i) => { dot.className = i < stage ? "done" : i === stage ? "active" : ""; });
+        if (stage === 0) {
+          tutorialIcon.textContent = "🥊";
+          tutorialTitle.textContent = "ボールをパンチではじこう！";
+          tutorialDescription.textContent = "左右からボールが飛んでくるよ。体をひねって、手でボールにタッチ！ すばやく当てるとパンチ、手を置いて受けるとガード。";
+          tutorialCue.textContent = "3回はじけたらOK（0/3）";
+          missionText.textContent = "ボールをパンチ！";
+          setStatus("やってみよう：パンチ", "飛んでくるボールに手を当ててはじこう");
+          kids.nextBallAt = now + 1200; kids.nextBeamAt = Infinity;
+        } else {
+          tutorialIcon.textContent = "⚡";
+          tutorialTitle.textContent = "ビームをしゃがんでよけよう！";
+          tutorialDescription.textContent = "「ビームが来るよ！」のあと、光の帯が出るよ。しゃがむ・かがむ、どんな形でもOK。頭も手も光の帯に入らなければ成功！";
+          tutorialCue.textContent = "光の帯の下へ！";
+          missionText.textContent = "ビームをよけよう！";
+          setStatus("やってみよう：ビームよけ", "カウントダウンのあと、しゃがんでよけよう");
+          kids.nextBallAt = Infinity; kids.nextBeamAt = now + 1800;
+        }
+        playSound("dataDisplay", 0.45);
+      }
+      function kidsTutorialProgress(now) {
+        tutorialCue.textContent = `3回はじけたらOK（${Math.min(kids.tutorialHits, 3)}/3）`;
+        if (kids.tutorialHits >= 3) kidsTutorialComplete(now);
+      }
+      function kidsTutorialComplete(now) {
+        if (tutorialLocked) return;
+        tutorialLocked = true;
+        tutorialNextButton.disabled = true;
+        recordResearchEvent("tutorial_stage_success", { variant: "kids", stage: kids.tutorialStage + 1, action: ["punch", "beam"][kids.tutorialStage] });
+        tutorialDots[kids.tutorialStage].className = "done";
+        tutorialTitle.textContent = "できた！ 大成功！";
+        tutorialCue.textContent = kids.tutorialStage === 0 ? "次は：ビームをよけよう" : "次は：本番スタート！";
+        playSound("confirmPrimary", 0.72);
+        kids.nextBallAt = Infinity;
+        window.setTimeout(() => {
+          if (gameMode !== "kids-tutorial") return;
+          if (kids.tutorialStage === 0) kidsShowTutorialStage(1);
+          else kidsFinishTutorial();
+        }, TUTORIAL_STAGE_DELAY_MS);
+      }
+      function kidsSkipTutorialStage() {
+        if (gameMode !== "kids-tutorial" || tutorialLocked) return;
+        tutorialSkippedCount += 1;
+        recordResearchEvent("tutorial_stage_skipped", { variant: "kids", stage: kids.tutorialStage + 1 });
+        playSound("confirmSecondary", 0.52);
+        if (kids.tutorialStage === 0) kidsShowTutorialStage(1);
+        else kidsFinishTutorial();
+      }
+      function kidsFinishTutorial() {
+        gameMode = "tutorial-complete";
+        kids.balls = []; kids.beam = null; kidsBanner.hidden = true;
+        tutorialNextButton.hidden = true;
+        tutorialDots.forEach((dot) => { dot.className = "done"; });
+        tutorialBadge.textContent = "こどもモード 準備OK！";
+        tutorialIcon.textContent = "🌟";
+        tutorialTitle.textContent = "パンチとビームよけ、できたね！";
+        tutorialDescription.textContent = "1分間、どんどん飛んでくるボールをパンチ！ ときどき来るビームはしゃがんでよけよう。";
+        tutorialCue.textContent = "ボール：パンチ50点〜（コンボでアップ）／ガード20点　ビーム：よけると150点";
+        tutorialStartButton.hidden = false;
+        missionText.textContent = "準備OK！";
+        setStatus("準備OK！", "「本番スタート！」を押すと1分間のゲームが始まります");
+        playSound("impactText", 0.65);
+      }
+
+      // ---- 本番（1分） ----
+      function beginKidsBattle() {
+        const now = performance.now();
+        lastBattleClockAt = now;
+        gameMode = "battle";
+        battleMission = null;
+        feedbackEpoch += 1;
+        shell.dataset.variant = "kids";
+        shell.dataset.action = "kids";
+        recordResearchEvent("battle_start", { durationMs: BATTLE_DURATION_MS, variant: "kids" });
+        trainingOverlay.classList.add("hidden");
+        tutorialPanel.hidden = true;
+        clearTutorialObjects();
+        hideFormCoach();
+        kidsReset();
+        kids.startedAt = now;
+        kids.nextBallAt = now + 1200;
+        kids.nextBeamAt = now + 9000;
+        battleEndsAt = now + BATTLE_DURATION_MS;
+        battleTimer.textContent = "01:00";
+        timerCard.classList.remove("warning");
+        finishBattleButton.hidden = false;
+        nextObstacleAt = nextBossAttackAt = Infinity;
+        missionText.textContent = "ボールをパンチ！ ビームはしゃがんでよけよう";
+        setStatus("スタート！", "飛んでくるボールをパンチ！ ビームの予告が出たらしゃがんでよけよう");
+        playSound("swordDraw", 0.68);
+      }
+
       function renderLoop() {
         if (!renderLoopActive) return;
         const now = performance.now();
@@ -5013,6 +5463,8 @@
         resizeCanvas();
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         drawAreaMask(ctx, canvas.width, canvas.height);
+        kidsTick(now);
+        kidsDraw(ctx, now);
 
         const activeReferenceVideo = gameMode === "calibration" || gameMode === "training" ? referenceVideo : coachVideo;
         drawEnlargedReference(activeReferenceVideo);
@@ -5054,7 +5506,9 @@
             });
             drawTrainingPreview(lm);
             updateJumpDetector(lm);
+            kidsOnPose(lm, now);
           } else {
+            kidsOnPose(null, now);
             trackingLostSince ??= now;
             if (now - trackingLostSince > TRACKING_GRACE_MS) {
               if (obstacleActive || bossAttackActive) actionTrackingLost = true;
@@ -5071,6 +5525,22 @@
         requestAnimationFrame(renderLoop);
       }
 
+      const variantButtons = document.querySelectorAll(".variant-option");
+      function selectVariant(variant, announce = true) {
+        gameVariant = variant === "kids" ? "kids" : "standard";
+        document.body.dataset.variant = gameVariant;
+        variantButtons.forEach((button) => {
+          const selected = button.dataset.variant === gameVariant;
+          button.classList.toggle("selected", selected);
+          button.setAttribute("aria-checked", String(selected));
+        });
+        if (gameVariant === "kids") {
+          if (selectedInputMode !== "mediapipe") selectInputMode("mediapipe", false);
+          startButton.textContent = "こどもモードで開始";
+        } else selectInputMode(selectedInputMode, false);
+        if (announce) playSound("confirmSecondary", 0.48);
+      }
+      variantButtons.forEach((button) => button.addEventListener("click", () => selectVariant(button.dataset.variant)));
       modeButtons.forEach((button) => {
         button.addEventListener("click", () => selectInputMode(button.dataset.inputMode));
       });
@@ -5102,8 +5572,8 @@
         resetCalibration();
       });
       battleButton.addEventListener("click", beginTutorial);
-      tutorialStartButton.addEventListener("click", beginBattle);
-      tutorialNextButton.addEventListener("click", skipTutorialStage);
+      tutorialStartButton.addEventListener("click", () => (gameVariant === "kids" ? beginKidsBattle() : beginBattle()));
+      tutorialNextButton.addEventListener("click", () => (gameVariant === "kids" ? kidsSkipTutorialStage() : skipTutorialStage()));
       researchDownloadButton.addEventListener("click", downloadResearchData);
       finishBattleButton.addEventListener("click", () => {
         playSound("confirmSecondary", 0.52);
